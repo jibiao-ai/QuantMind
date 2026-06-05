@@ -166,5 +166,6 @@ export const getDataNews = (params) => api.get('/data/news', { params })
 export const getDataGuba = (params) => api.get('/data/guba', { params })
 export const getDataF10 = (params) => api.get('/data/f10', { params })
 export const getDataAnnounce = (params) => api.get('/data/announce', { params })
+export const validateStockCode = (params) => api.get('/data/validate-stock', { params })
 
 export default api

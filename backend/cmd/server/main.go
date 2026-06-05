@@ -167,6 +167,7 @@ func main() {
 		auth.GET("/data/guba", h.GetDataGuba)
 		auth.GET("/data/f10", h.GetDataF10)
 		auth.GET("/data/announce", h.GetDataAnnounce)
+		auth.GET("/data/validate-stock", h.ValidateStockCode)
 
 		// Watchlist
 		auth.GET("/watchlist", h.GetWatchlist)
