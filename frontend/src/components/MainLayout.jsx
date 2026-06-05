@@ -19,6 +19,7 @@ import AIStockPickPage from '../pages/AIStockPickPage'
 import BroadcastPage from '../pages/BroadcastPage'
 import HotMoneyBoardPage from '../pages/HotMoneyBoardPage'
 import StockDecisionPage from '../pages/StockDecisionPage'
+import XiaofanSelectPage from '../pages/XiaofanSelectPage'
 
 const pageMap = {
   'dashboard': DashboardPage,
@@ -29,6 +30,7 @@ const pageMap = {
   'watchlist': WatchlistPage,
   'hot-list': HotListPage,
   'ai-stock-pick': AIStockPickPage,
+  'xiaofan-select': XiaofanSelectPage,
   // === AI智能体功能已隐藏（暂时关闭） ===
   // 'smart-ask': () => <ChatPage agentType="smart_ask" />,
   // 'smart-diagnose': () => <ChatPage agentType="smart_diagnose" />,

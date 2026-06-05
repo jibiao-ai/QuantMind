@@ -147,4 +147,24 @@ export const updatePushConfig = (channel, data) => api.put(`/decision/push-confi
 export const testPushNotification = (channel) => api.post(`/decision/push-test/${channel}`)
 export const getStockNews = (params) => api.get('/decision/news', { params })
 
+// 小樊精选 (Xiaofan Select)
+export const getXiaofanCategories = () => api.get('/xiaofan/categories')
+export const createXiaofanCategory = (data) => api.post('/xiaofan/categories', data)
+export const updateXiaofanCategory = (id, data) => api.put(`/xiaofan/categories/${id}`, data)
+export const deleteXiaofanCategory = (id) => api.delete(`/xiaofan/categories/${id}`)
+export const getXiaofanCategoryStocks = (id) => api.get(`/xiaofan/categories/${id}/stocks`)
+export const addXiaofanStock = (id, data) => api.post(`/xiaofan/categories/${id}/stocks`, data)
+export const batchAddXiaofanStocks = (id, data) => api.post(`/xiaofan/categories/${id}/stocks/batch`, data)
+export const removeXiaofanStock = (stockId) => api.delete(`/xiaofan/stocks/${stockId}`)
+
+// 数据服务 (Data Service - mootdx/tencent/akshare/cninfo/eastmoney)
+export const getDataQuote = (params) => api.get('/data/quote', { params })
+export const getDataKline = (params) => api.get('/data/kline', { params })
+export const getDataMinute = (params) => api.get('/data/minute', { params })
+export const getDataResearch = (params) => api.get('/data/research', { params })
+export const getDataNews = (params) => api.get('/data/news', { params })
+export const getDataGuba = (params) => api.get('/data/guba', { params })
+export const getDataF10 = (params) => api.get('/data/f10', { params })
+export const getDataAnnounce = (params) => api.get('/data/announce', { params })
+
 export default api

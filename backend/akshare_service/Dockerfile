@@ -2,11 +2,17 @@ FROM python:3.11-slim
 
 WORKDIR /app
 
+# Install system dependencies for mootdx
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    && rm -rf /var/lib/apt/lists/*
+
 # Install dependencies first for better caching
 COPY requirements.txt .
 RUN pip install --no-cache-dir -i https://pypi.tuna.tsinghua.edu.cn/simple \
     akshare>=1.12.0 \
-    pandas>=1.5.0
+    pandas>=1.5.0 \
+    mootdx>=0.11.0
 
 # Copy application code
 COPY main.py .

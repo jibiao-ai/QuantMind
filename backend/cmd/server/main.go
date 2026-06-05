@@ -148,6 +148,26 @@ func main() {
 		// Today's stock picks (all users can read)
 		auth.GET("/stock-picks/today", h.GetTodayPicks)
 
+		// 小樊精选 (Xiaofan Select)
+		auth.GET("/xiaofan/categories", h.GetXiaofanCategories)
+		auth.POST("/xiaofan/categories", h.CreateXiaofanCategory)
+		auth.PUT("/xiaofan/categories/:id", h.UpdateXiaofanCategory)
+		auth.DELETE("/xiaofan/categories/:id", h.DeleteXiaofanCategory)
+		auth.GET("/xiaofan/categories/:id/stocks", h.GetXiaofanCategoryStocks)
+		auth.POST("/xiaofan/categories/:id/stocks", h.AddXiaofanStock)
+		auth.POST("/xiaofan/categories/:id/stocks/batch", h.BatchAddXiaofanStocks)
+		auth.DELETE("/xiaofan/stocks/:stockId", h.RemoveXiaofanStock)
+
+		// 数据服务代理 (Data Service Proxy - mootdx/tencent/akshare/cninfo/eastmoney)
+		auth.GET("/data/quote", h.GetDataQuote)
+		auth.GET("/data/kline", h.GetDataKline)
+		auth.GET("/data/minute", h.GetDataMinute)
+		auth.GET("/data/research", h.GetDataResearch)
+		auth.GET("/data/news", h.GetDataNews)
+		auth.GET("/data/guba", h.GetDataGuba)
+		auth.GET("/data/f10", h.GetDataF10)
+		auth.GET("/data/announce", h.GetDataAnnounce)
+
 		// Watchlist
 		auth.GET("/watchlist", h.GetWatchlist)
 		auth.POST("/watchlist", h.AddWatchlistItem)

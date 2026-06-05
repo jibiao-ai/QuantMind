@@ -309,6 +309,32 @@ type AIStockPick struct {
 	CreatedAt    time.Time `json:"created_at"`
 }
 
+// XiaofanCategory - 小樊精选分类
+type XiaofanCategory struct {
+	ID        uint           `gorm:"primaryKey" json:"id"`
+	Name      string         `gorm:"size:200;not null" json:"name"`       // 分类名称（支持中文）
+	SortOrder int            `gorm:"default:0" json:"sort_order"`         // 排序序号
+	UserID    uint           `gorm:"index" json:"user_id"`                // 创建用户
+	CreatedAt time.Time      `json:"created_at"`
+	UpdatedAt time.Time      `json:"updated_at"`
+	DeletedAt gorm.DeletedAt `gorm:"index" json:"-"`
+	Stocks    []XiaofanStock `gorm:"foreignKey:CategoryID" json:"stocks,omitempty"`
+}
+
+// XiaofanStock - 小樊精选股票
+type XiaofanStock struct {
+	ID         uint           `gorm:"primaryKey" json:"id"`
+	CategoryID uint           `gorm:"index;not null" json:"category_id"`  // 所属分类
+	Code       string         `gorm:"size:20;not null" json:"code"`       // 股票代码
+	Name       string         `gorm:"size:100" json:"name"`               // 股票名称
+	Note       string         `gorm:"size:500" json:"note"`               // 备注
+	SortOrder  int            `gorm:"default:0" json:"sort_order"`        // 排序
+	UserID     uint           `gorm:"index" json:"user_id"`               // 添加用户
+	CreatedAt  time.Time      `json:"created_at"`
+	UpdatedAt  time.Time      `json:"updated_at"`
+	DeletedAt  gorm.DeletedAt `gorm:"index" json:"-"`
+}
+
 // AIStockPickBatch - AI筛选批次记录
 type AIStockPickBatch struct {
 	ID             uint      `gorm:"primaryKey" json:"id"`

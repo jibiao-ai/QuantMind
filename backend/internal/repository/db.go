@@ -102,6 +102,8 @@ func InitDB(cfg *config.Config) {
 		&model.AIStockPick{},
 		&model.AIStockPickBatch{},
 		&model.SystemConfig{},
+		&model.XiaofanCategory{},
+		&model.XiaofanStock{},
 	)
 	// Migrate Tushare dashboard models (龙虎榜/涨跌停/连板/竞价/资金流)
 	// Done via handler.AutoMigrateDashboardModels in main.go to avoid circular import
