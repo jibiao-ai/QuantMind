@@ -121,3 +121,66 @@ func (h *Handler) GetDataAnnounce(c *gin.Context) {
 		"page":      c.Query("page"),
 	})
 }
+
+// ValidateStockCode - 验证股票代码并返回真实名称
+// 调用腾讯/通达信接口验证代码有效性
+func (h *Handler) ValidateStockCode(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		c.JSON(http.StatusBadRequest, gin.H{"code": -1, "error": "股票代码不能为空"})
+		return
+	}
+
+	log.Printf("[DataProxy] ValidateStockCode: code=%s", code)
+
+	baseURL := getAkShareServiceURL()
+	reqURL := fmt.Sprintf("%s/quote?codes=%s", baseURL, code)
+
+	resp, err := dataServiceClient.Get(reqURL)
+	if err != nil {
+		log.Printf("[DataProxy] ValidateStock request failed: %v", err)
+		c.JSON(http.StatusServiceUnavailable, gin.H{"code": -1, "error": "数据服务不可用", "valid": false})
+		return
+	}
+	defer resp.Body.Close()
+
+	body, err := io.ReadAll(resp.Body)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "error": "读取响应失败", "valid": false})
+		return
+	}
+
+	var result map[string]interface{}
+	if err := json.Unmarshal(body, &result); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"code": -1, "error": "解析响应失败", "valid": false})
+		return
+	}
+
+	// Check if quote data contains valid name
+	if data, ok := result["data"]; ok {
+		if quotes, ok := data.([]interface{}); ok && len(quotes) > 0 {
+			if q, ok := quotes[0].(map[string]interface{}); ok {
+				name, _ := q["name"].(string)
+				price, _ := q["price"].(float64)
+				if name != "" && name != "---" && price > 0 {
+					log.Printf("[DataProxy] ValidateStock success: code=%s, name=%s", code, name)
+					c.JSON(http.StatusOK, gin.H{"code": 0, "valid": true, "name": name, "price": price})
+					return
+				}
+			}
+		}
+		// Also handle single quote object
+		if q, ok := data.(map[string]interface{}); ok {
+			name, _ := q["name"].(string)
+			price, _ := q["price"].(float64)
+			if name != "" && name != "---" && price > 0 {
+				log.Printf("[DataProxy] ValidateStock success: code=%s, name=%s", code, name)
+				c.JSON(http.StatusOK, gin.H{"code": 0, "valid": true, "name": name, "price": price})
+				return
+			}
+		}
+	}
+
+	log.Printf("[DataProxy] ValidateStock invalid: code=%s", code)
+	c.JSON(http.StatusOK, gin.H{"code": 0, "valid": false, "error": "无效的股票代码"})
+}
