@@ -33,7 +33,7 @@ func (h *Handler) CreateXiaofanCategory(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("userID")
+	userID, _ := c.Get("user_id")
 	category := model.XiaofanCategory{
 		Name:      req.Name,
 		SortOrder: req.SortOrder,
@@ -125,7 +125,7 @@ func (h *Handler) AddXiaofanStock(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("userID")
+	userID, _ := c.Get("user_id")
 	stock := model.XiaofanStock{
 		CategoryID: uint(categoryID),
 		Code:       req.Code,
@@ -186,7 +186,7 @@ func (h *Handler) BatchAddXiaofanStocks(c *gin.Context) {
 		return
 	}
 
-	userID, _ := c.Get("userID")
+	userID, _ := c.Get("user_id")
 	added := 0
 	for _, s := range req.Stocks {
 		if s.Code == "" {
