@@ -2,17 +2,17 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
   getXiaofanCategories, createXiaofanCategory, updateXiaofanCategory, deleteXiaofanCategory,
   addXiaofanStock, removeXiaofanStock, getDataQuote, getDataKline, getDataResearch,
-  getDataNews, getDataGuba, getDataAnnounce, getChipDistribution, validateStockCode
+  getDataNews, getDataAnnounce, getChipDistribution, validateStockCode, getGubaDiscussion
 } from '../services/api'
 import { 
   Plus, Trash2, RefreshCw, Search, X, BarChart3, MessageCircle, FileText, 
   Newspaper, Edit3, FolderPlus, ExternalLink, Eye, Loader2,
-  Maximize2, Minimize2, Play, Pause, Clock, BookOpen, ChevronDown
+  Maximize2, Minimize2, Play, Pause, Clock, BookOpen, ChevronDown, AlertTriangle
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
 // ==================== K线图组件 ====================
-function KlineChart({ klines, title, compact = false }) {
+function KlineChart({ klines, title, compact = false, darkMode = true }) {
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const [tooltip, setTooltip] = useState(null)
@@ -53,12 +53,12 @@ function KlineChart({ klines, title, compact = false }) {
     const padding = (max - min) * 0.05 || 0.5
     const priceMin = min - padding, priceMax = max + padding
 
-    // Background
-    ctx.fillStyle = '#0f0f14'
+    // Background - white for light mode, dark for fullscreen
+    ctx.fillStyle = darkMode ? '#0f0f14' : '#ffffff'
     ctx.fillRect(0, 0, W, H)
 
     // Grid
-    ctx.strokeStyle = 'rgba(255,255,255,0.04)'
+    ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)'
     ctx.lineWidth = 0.5
     for (let i = 0; i <= 4; i++) {
       const y = padT + (kDrawH / 4) * i
@@ -66,7 +66,7 @@ function KlineChart({ klines, title, compact = false }) {
     }
 
     // Y labels
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
+    ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)'
     ctx.font = `${compact ? 8 : 9}px monospace`
     ctx.textAlign = 'right'
     for (let i = 0; i <= 4; i++) {
@@ -129,7 +129,7 @@ function KlineChart({ klines, title, compact = false }) {
 
     // Title
     if (title) {
-      ctx.fillStyle = 'rgba(255,255,255,0.5)'
+      ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'
       ctx.font = `bold ${compact ? 9 : 10}px sans-serif`
       ctx.textAlign = 'left'
       ctx.fillText(title, padL + 5, padT + 10)
@@ -146,10 +146,10 @@ function KlineChart({ klines, title, compact = false }) {
       ctx.textAlign = 'right'
       ctx.fillText(`${last.close.toFixed(2)} ${isUp ? '+' : ''}${pct.toFixed(2)}%`, W - padR - 5, padT + 12)
     }
-  }, [klines, title, compact, H])
+  }, [klines, title, compact, H, darkMode])
 
   return (
-    <div ref={containerRef} className="rounded-lg overflow-hidden" style={{ background: '#0f0f14' }}>
+    <div ref={containerRef} className="rounded-lg overflow-hidden" style={{ background: darkMode ? '#0f0f14' : '#ffffff' }}>
       <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: `${H}px`, cursor: 'crosshair' }} />
     </div>
   )
@@ -183,6 +183,71 @@ function InfoModal({ open, onClose, title, loading, children }) {
   )
 }
 
+// ==================== 确认弹窗组件 ====================
+function ConfirmDialog({ open, title, message, detail, confirmText, cancelText, danger, onConfirm, onCancel }) {
+  const overlayRef = useRef(null)
+
+  useEffect(() => {
+    if (!open) return
+    const handleKey = (e) => { if (e.key === 'Escape') onCancel?.() }
+    document.addEventListener('keydown', handleKey)
+    return () => document.removeEventListener('keydown', handleKey)
+  }, [open, onCancel])
+
+  if (!open) return null
+
+  return (
+    <div ref={overlayRef}
+      className="fixed inset-0 z-[9999] flex items-center justify-center"
+      onClick={(e) => { if (e.target === overlayRef.current) onCancel?.() }}>
+      {/* Backdrop */}
+      <div className="absolute inset-0 bg-black/40 backdrop-blur-sm" style={{ animation: 'fadeIn 0.15s ease-out' }} />
+      {/* Dialog */}
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-sm mx-4 overflow-hidden"
+        style={{ animation: 'scaleIn 0.2s cubic-bezier(0.34,1.56,0.64,1)' }}>
+        <div className="p-6">
+          {/* Icon */}
+          <div className={`w-12 h-12 mx-auto rounded-xl flex items-center justify-center mb-4 ${
+            danger ? 'bg-red-50' : 'bg-[#F0EDFA]'}`}>
+            {danger
+              ? <Trash2 size={22} className="text-red-500" />
+              : <AlertTriangle size={22} className="text-[#513CC8]" />}
+          </div>
+          {/* Title */}
+          <h3 className="text-center text-base font-bold text-gray-900 mb-1.5">{title}</h3>
+          {/* Message */}
+          <p className="text-center text-sm text-gray-500 leading-relaxed">{message}</p>
+          {/* Detail info */}
+          {detail && (
+            <div className="mt-3 p-3 rounded-xl bg-gray-50 border border-gray-100">
+              <p className="text-center text-xs text-gray-600 font-medium">{detail}</p>
+            </div>
+          )}
+        </div>
+        {/* Buttons */}
+        <div className="flex gap-3 px-6 pb-6">
+          <button onClick={onCancel}
+            className="flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-gray-600 bg-gray-100 hover:bg-gray-200 transition-all active:scale-[0.97]">
+            {cancelText || '取消'}
+          </button>
+          <button onClick={onConfirm}
+            className={`flex-1 px-4 py-2.5 rounded-xl text-sm font-medium text-white transition-all active:scale-[0.97] shadow-sm ${
+              danger
+                ? 'bg-red-500 hover:bg-red-600 shadow-red-200'
+                : 'hover:opacity-90 shadow-purple-200'}`}
+            style={danger ? {} : { background: '#513CC8' }}>
+            {confirmText || '确认'}
+          </button>
+        </div>
+      </div>
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0 } to { opacity: 1 } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.85) } to { opacity: 1; transform: scale(1) } }
+      `}</style>
+    </div>
+  )
+}
+
 // ==================== 主组件 ====================
 export default function XiaofanSelectPage() {
   // Category state
@@ -198,6 +263,9 @@ export default function XiaofanSelectPage() {
   const [addingStock, setAddingStock] = useState(false)
   const [stockQuotes, setStockQuotes] = useState({})
   const [refreshing, setRefreshing] = useState(false)
+
+  // Confirm dialog state
+  const [confirmDialog, setConfirmDialog] = useState({ open: false })
 
   // K-line data for all stocks
   const [stockKlines, setStockKlines] = useState({}) // { code: { day, week, month, year } }
@@ -350,15 +418,26 @@ export default function XiaofanSelectPage() {
   }
 
   const handleDeleteCategory = async (id) => {
-    if (!confirm('确定删除该分类及其所有股票？')) return
-    try {
-      const res = await deleteXiaofanCategory(id)
-      if (res.code === 0) {
-        toast.success('已删除')
-        if (activeCategoryId === id) setActiveCategoryId(categories.find(c => c.id !== id)?.id || null)
-        loadCategories()
+    const cat = categories.find(c => c.id === id)
+    setConfirmDialog({
+      open: true,
+      title: '删除分类',
+      message: '确定删除该分类及其所有股票？此操作不可恢复。',
+      detail: cat ? `${cat.name}（${cat.stocks?.length || 0} 只股票）` : '',
+      confirmText: '确认删除',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        try {
+          const res = await deleteXiaofanCategory(id)
+          if (res.code === 0) {
+            toast.success('已删除')
+            if (activeCategoryId === id) setActiveCategoryId(categories.find(c => c.id !== id)?.id || null)
+            loadCategories()
+          }
+        } catch (e) { toast.error('删除失败') }
       }
-    } catch (e) { toast.error('删除失败') }
+    })
   }
 
   // === Add stock with validation ===
@@ -392,11 +471,21 @@ export default function XiaofanSelectPage() {
   }
 
   const handleRemoveStock = async (stockId, name) => {
-    if (!confirm(`确定移除 ${name}？`)) return
-    try {
-      const res = await removeXiaofanStock(stockId)
-      if (res.code === 0) { toast.success(`已移除 ${name}`); loadCategories() }
-    } catch (e) { toast.error('移除失败') }
+    setConfirmDialog({
+      open: true,
+      title: '移除股票',
+      message: '确定将该股票从当前分类中移除吗？',
+      detail: name,
+      confirmText: '确认移除',
+      danger: true,
+      onConfirm: async () => {
+        setConfirmDialog({ open: false })
+        try {
+          const res = await removeXiaofanStock(stockId)
+          if (res.code === 0) { toast.success(`已移除 ${name}`); loadCategories() }
+        } catch (e) { toast.error('移除失败') }
+      }
+    })
   }
 
   // === Info Modal (guba/news/announce) ===
@@ -406,8 +495,16 @@ export default function XiaofanSelectPage() {
     setModalLoading(true)
     try {
       let res
-      if (type === 'guba') res = await getDataGuba({ code, page_size: 30 })
-      else if (type === 'news') res = await getDataNews({ code })
+      if (type === 'guba') {
+        // 使用与自选个股相同的东方财富股吧接口（已验证可用）
+        res = await getGubaDiscussion({ code, page: 1, page_size: 30 })
+        if (res?.code === 0 && res.data) {
+          const posts = res.data.posts || []
+          setModalData(posts)
+          setModalLoading(false)
+          return
+        }
+      } else if (type === 'news') res = await getDataNews({ code })
       else if (type === 'announce') res = await getDataAnnounce({ code, page_size: 20 })
       else if (type === 'research') res = await getDataResearch({ code, page_size: 20 })
 
@@ -672,7 +769,7 @@ export default function XiaofanSelectPage() {
                       <Loader2 size={16} className="animate-spin mr-1.5" /><span className="text-xs">加载K线...</span>
                     </div>
                   ) : currentKlines.length > 0 ? (
-                    <KlineChart klines={currentKlines} title={periodLabels[period]} compact={true} />
+                    <KlineChart klines={currentKlines} title={periodLabels[period]} compact={true} darkMode={isFullscreen} />
                   ) : (
                     <div className={`flex items-center justify-center text-xs ${isFullscreen ? 'text-gray-600' : 'text-gray-400'}`} style={{ height: '180px' }}>
                       暂无{periodLabels[period]}数据
@@ -752,6 +849,19 @@ export default function XiaofanSelectPage() {
           </div>
         )}
       </InfoModal>
+
+      {/* Confirm Dialog */}
+      <ConfirmDialog
+        open={confirmDialog.open}
+        title={confirmDialog.title}
+        message={confirmDialog.message}
+        detail={confirmDialog.detail}
+        confirmText={confirmDialog.confirmText}
+        cancelText={confirmDialog.cancelText}
+        danger={confirmDialog.danger}
+        onConfirm={confirmDialog.onConfirm}
+        onCancel={() => setConfirmDialog({ open: false })}
+      />
     </div>
   )
 }
