@@ -62,7 +62,7 @@ export default function RealtimePage() {
   const tooltipStyle = { background: '#FFFFFF', border: '1px solid #E5E7EB', borderRadius: 8, fontSize: 12, boxShadow: '0 4px 12px rgba(0,0,0,0.08)' }
 
   return (
-    <div className="p-4 space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
+    <div className="p-2 md:p-4 space-y-3 md:space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold gradient-text">实时行情</h1>
@@ -153,7 +153,7 @@ export default function RealtimePage() {
           </div>
 
           {/* Quote Details Grid */}
-          <div className="grid grid-cols-4 gap-4">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
             {[
               { label: '今开', value: quote.open?.toFixed(2), color: quote.open >= quote.pre_close ? '#EF4444' : '#22C55E' },
               { label: '最高', value: quote.high?.toFixed(2), color: '#EF4444' },

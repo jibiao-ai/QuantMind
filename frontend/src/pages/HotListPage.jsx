@@ -464,7 +464,7 @@ export default function HotListPage() {
   // ==================== RENDER ====================
 
   return (
-    <div className="p-4 space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
+    <div className="p-2 md:p-4 space-y-3 md:space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -511,9 +511,9 @@ export default function HotListPage() {
       </div>
 
       {/* Main Content */}
-      <div className={`grid gap-4 ${selectedStock ? 'grid-cols-12' : 'grid-cols-1'}`}>
+      <div className={`grid gap-3 md:gap-4 ${selectedStock ? 'grid-cols-1 md:grid-cols-12' : 'grid-cols-1'}`}>
         {/* Table */}
-        <div className={`glass-card p-4 ${selectedStock ? 'col-span-7' : 'col-span-1'}`}>
+        <div className={`glass-card p-3 md:p-4 ${selectedStock ? 'col-span-1 md:col-span-7' : 'col-span-1'}`}>
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
@@ -606,7 +606,7 @@ export default function HotListPage() {
 
         {/* Detail Panel */}
         {selectedStock && (
-          <div className="col-span-5 glass-card p-4 flex flex-col" style={{ maxHeight: 'calc(100vh - 140px)' }}>
+          <div className="col-span-1 md:col-span-5 glass-card p-3 md:p-4 flex flex-col" style={{ maxHeight: 'calc(100vh - 140px)' }}>
             {/* Panel header */}
             <div className="flex items-center justify-between mb-3">
               <div>

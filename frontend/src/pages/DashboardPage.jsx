@@ -511,11 +511,11 @@ export default function DashboardPage() {
   }
 
   return (
-    <div ref={dashboardRef} className="p-4 space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
+    <div ref={dashboardRef} className="p-2 md:p-4 space-y-3 md:space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold gradient-text">A股看板大屏</h1>
+          <h1 className="text-lg md:text-2xl font-bold gradient-text">A股看板大屏</h1>
           <p className="text-xs text-gray-400 mt-1">
             数据来源：Tushare Pro → AkShare → 东方财富 · {loading ? '加载中...' : `最后更新 ${new Date().toLocaleTimeString('zh-CN')}`}
             {overview?.trade_date && <span className="ml-2 text-[#513CC8]">交易日: {overview.trade_date}</span>}
@@ -542,10 +542,10 @@ export default function DashboardPage() {
           <TrendingUp size={16} style={{ color: '#513CC8' }} /> 大盘速览
           <RefreshBtn onClick={() => refreshSection('overview')} />
         </h3>
-        <div className="grid grid-cols-12 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
           {/* Index Cards */}
-          <div className="col-span-7">
-            <div className="grid grid-cols-3 gap-3 mb-3">
+          <div className="col-span-1 md:col-span-7">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 sm:gap-3 mb-3">
               {(indices.length > 0 ? indices : [
                 { name: '上证指数', price: 0, change: 0, change_pct: 0 },
                 { name: '深证成指', price: 0, change: 0, change_pct: 0 },
@@ -624,7 +624,7 @@ export default function DashboardPage() {
           </div>
 
           {/* Quick Stats */}
-          <div className="col-span-5 grid grid-cols-3 gap-2">
+          <div className="col-span-1 md:col-span-5 grid grid-cols-3 gap-2">
             {[
               { label: '涨停', value: sentimentData.limit_up || tsSentiment.limit_up_count || 0, color: '#EF4444', suffix: '家' },
               { label: '跌停', value: sentimentData.limit_down || tsSentiment.limit_down_count || 0, color: '#22C55E', suffix: '家' },
@@ -643,9 +643,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ==================== Row 2: 涨跌分布 + 情绪温度计 + 连板天梯 ==================== */}
-      <div className="grid grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
         {/* 涨跌分布 */}
-        <div className="col-span-4 glass-card p-4">
+        <div className="col-span-1 md:col-span-4 glass-card p-3 md:p-4">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-800">
             <BarChart3 size={16} style={{ color: '#513CC8' }} /> 涨跌分布
             {overview?.trade_date && <span className="text-[10px] text-gray-400 font-normal ml-1">({overview.trade_date})</span>}
@@ -686,7 +686,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 情绪温度计 */}
-        <div className="col-span-4 glass-card p-4">
+        <div className="col-span-1 md:col-span-4 glass-card p-3 md:p-4">
           <h3 className="text-sm font-semibold mb-2 flex items-center gap-2 text-gray-800">
             <Activity size={16} style={{ color: '#F59E0B' }} /> 情绪温度计
             {overview?.trade_date && <span className="text-[10px] text-gray-400 font-normal ml-1">({overview.trade_date})</span>}
@@ -707,7 +707,7 @@ export default function DashboardPage() {
             </span>
           </div>
           {/* 5-day sentiment stats */}
-          <div className="grid grid-cols-5 gap-1 mb-2">
+          <div className="grid grid-cols-3 md:grid-cols-5 gap-1 mb-2">
             {[
               { label: '涨停', value: sentimentData.limit_up || 0, color: '#EF4444' },
               { label: '跌停', value: sentimentData.limit_down || 0, color: '#22C55E' },
@@ -742,7 +742,7 @@ export default function DashboardPage() {
         </div>
 
         {/* 连板天梯 */}
-        <div className="col-span-4 glass-card p-4">
+        <div className="col-span-1 md:col-span-4 glass-card p-3 md:p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-800">
               <Crown size={16} className="text-red-500" /> 连板天梯
@@ -868,9 +868,9 @@ export default function DashboardPage() {
       </div>
 
       {/* ==================== Row 3: 涨跌停个股 + 资金流向 ==================== */}
-      <div className="grid grid-cols-12 gap-3">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3">
         {/* Daily Limit-up / Limit-down / Broken stocks from Tushare */}
-        <div className="col-span-6 glass-card p-4">
+        <div className="col-span-1 md:col-span-6 glass-card p-3 md:p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-800">
               <Eye size={16} style={{ color: '#EF4444' }} /> 当日涨跌停个股
@@ -966,7 +966,7 @@ export default function DashboardPage() {
         </div>
 
         {/* Tushare资金流向 */}
-        <div className="col-span-6 glass-card p-4">
+        <div className="col-span-1 md:col-span-6 glass-card p-3 md:p-4">
           <div className="flex items-center justify-between mb-3">
             <h3 className="text-sm font-semibold flex items-center gap-2 text-gray-800">
               <DollarSign size={16} style={{ color: '#3B82F6' }} /> 资金流向
@@ -1048,10 +1048,10 @@ export default function DashboardPage() {
       </div>
 
       {/* ==================== Row 4: 热力板块 + 热力概念 ==================== */}
-      <div className="grid grid-cols-12 gap-3" style={{ alignItems: 'stretch' }}>
-        <div className="col-span-6 glass-card p-4 flex flex-col">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3" style={{ alignItems: 'stretch' }}>
+        <div className="col-span-1 md:col-span-6 glass-card p-3 md:p-4 flex flex-col">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-800"><Flame size={16} style={{ color: '#513CC8' }} /> 热力板块 {overview?.trade_date && <span className="text-[10px] text-gray-400 font-normal ml-1">({overview.trade_date})</span>} <span className="text-[10px] text-gray-400 font-normal">({sectorHeatTotal || sectors.length}个)</span></h3>
-          <div className="grid grid-cols-4 gap-1.5 flex-1">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 flex-1">
             {sectors.slice((sectorHeatPage - 1) * 16, sectorHeatPage * 16).map((s, i) => {
               const intensity = Math.min(Math.abs(s.change_pct) / 4, 1)
               const bg = s.change_pct >= 0
@@ -1073,9 +1073,9 @@ export default function DashboardPage() {
           )}
         </div>
 
-        <div className="col-span-6 glass-card p-4 flex flex-col">
+        <div className="col-span-1 md:col-span-6 glass-card p-3 md:p-4 flex flex-col">
           <h3 className="text-sm font-semibold mb-3 flex items-center gap-2 text-gray-800"><Lightbulb size={16} style={{ color: '#513CC8' }} /> 热力概念 {overview?.trade_date && <span className="text-[10px] text-gray-400 font-normal ml-1">({overview.trade_date})</span>} <span className="text-[10px] text-gray-400 font-normal">({finalConceptData.length}个)</span></h3>
-          <div className="grid grid-cols-4 gap-1.5 flex-1">
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-1.5 flex-1">
             {finalConceptData.slice((conceptHeatPage - 1) * 16, conceptHeatPage * 16).map((c, i) => {
               const changePct = c.change_pct || c.pct_change || 0
               const intensity = Math.min(Math.abs(changePct) / 4, 1)

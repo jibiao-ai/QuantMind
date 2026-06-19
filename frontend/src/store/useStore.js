@@ -20,11 +20,16 @@ const useStore = create((set, get) => ({
 
   // Navigation
   currentPage: 'dashboard',
-  setCurrentPage: (page) => set({ currentPage: page }),
+  setCurrentPage: (page) => set({ currentPage: page, mobileMenuOpen: false }),
 
   // Sidebar
   sidebarCollapsed: false,
   toggleSidebar: () => set(state => ({ sidebarCollapsed: !state.sidebarCollapsed })),
+
+  // Mobile
+  mobileMenuOpen: false,
+  setMobileMenuOpen: (open) => set({ mobileMenuOpen: open }),
+  toggleMobileMenu: () => set(state => ({ mobileMenuOpen: !state.mobileMenuOpen })),
 }))
 
 export default useStore
