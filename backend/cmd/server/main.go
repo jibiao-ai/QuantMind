@@ -41,6 +41,9 @@ func main() {
 	// Seed demo market data for past 7 days
 	handler.SeedDemoMarketData()
 
+	// Seed 小樊精选 preset categories and stocks
+	handler.SeedXiaofanPresets()
+
 	// Start AI Stock Pick hourly scheduler
 	handler.StartAIStockPickScheduler()
 
