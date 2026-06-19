@@ -952,7 +952,7 @@ export default function WatchlistPage() {
   }
 
   return (
-    <div className="p-4 space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
+    <div className="p-2 md:p-4 space-y-3 md:space-y-4 min-h-screen" style={{ background: '#F8F9FC' }}>
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold gradient-text">自选个股</h1>
@@ -1010,9 +1010,9 @@ export default function WatchlistPage() {
       </div>
 
       {/* Main content: Table + Detail Panel */}
-      <div className="grid grid-cols-12 gap-4">
+      <div className="grid grid-cols-1 md:grid-cols-12 gap-3 md:gap-4">
         {/* Stocks Table */}
-        <div className={detailStock ? 'col-span-7' : 'col-span-12'}>
+        <div className={detailStock ? 'col-span-1 md:col-span-7' : 'col-span-1 md:col-span-12'}>
           {loading ? (
             <div className="glass-card p-8 text-center text-gray-400">
               <RefreshCw size={24} className="mx-auto mb-2 animate-spin" />
@@ -1138,7 +1138,7 @@ export default function WatchlistPage() {
 
         {/* Detail Panel */}
         {detailStock && (
-          <div className="col-span-5">
+          <div className="col-span-1 md:col-span-5">
             <div className="glass-card p-4 sticky top-4">
               {/* Header */}
               <div className="flex items-center justify-between mb-3">

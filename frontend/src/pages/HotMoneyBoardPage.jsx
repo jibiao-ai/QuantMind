@@ -102,7 +102,7 @@ function SummaryCards({ traders }) {
   ]
 
   return (
-    <div className="grid grid-cols-5 gap-2">
+    <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
       {cards.map((card, i) => (
         <div key={i} className="relative rounded-lg p-2.5 text-center border border-gray-100 bg-white hover:shadow-md transition cursor-default"
           onMouseEnter={() => setHoveredCard(i)}
@@ -838,7 +838,7 @@ function ChipKlineView({ data, period }) {
       {data.chip_data?.length > 0 && (
         <div className="rounded-lg p-3 border" style={{ background: '#F9F8FC', borderColor: '#E8E3F8' }}>
           <p className="text-xs font-medium mb-2" style={{ color: '#513CC8' }}>筹码分布概要</p>
-          <div className="grid grid-cols-3 gap-2 text-xs">
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-2 text-xs">
             <div><span className="text-gray-500">获利比例</span> <span className="ml-1 font-bold text-red-500">{data.chip_data[0]?.profit_ratio?.toFixed(1)}%</span></div>
             <div><span className="text-gray-500">平均成本</span> <span className="ml-1 font-bold text-gray-800">{data.chip_data[0]?.avg_cost?.toFixed(2)}</span></div>
             <div><span className="text-gray-500">集中度</span> <span className="ml-1 font-bold" style={{ color: '#513CC8' }}>{data.chip_data[0]?.concentration?.toFixed(1)}%</span></div>
@@ -872,7 +872,7 @@ function WeeklyKlineView({ data }) {
         })}
       </div>
       {klines.length > 0 && (
-        <div className="grid grid-cols-4 gap-2 text-xs">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2 text-xs">
           {[
             { label: '最新收盘', value: klines[klines.length-1]?.close?.toFixed(2), color: 'text-gray-800' },
             { label: '周最高', value: klines[klines.length-1]?.high?.toFixed(2), color: 'text-red-500' },
@@ -895,7 +895,7 @@ function FundFlowView({ data }) {
   return (
     <div className="space-y-3">
       {data.summary && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
           {[
             { label: '主力净流入', value: data.summary.main_net },
             { label: '超大单', value: data.summary.super_net },

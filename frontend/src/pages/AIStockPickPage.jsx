@@ -769,7 +769,7 @@ function ChipTab({ loading, data }) {
   return (
     <div className="space-y-3">
       {summary.avg_cost > 0 && (
-        <div className="grid grid-cols-5 gap-2 p-3 rounded-xl border border-gray-200 bg-gray-50">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-2 p-3 rounded-xl border border-gray-200 bg-gray-50">
           <div className="text-center">
             <p className="text-[9px] text-gray-400">获利比例</p>
             <p className="text-xs font-bold text-red-600">{summary.profit_ratio?.toFixed(1)}%</p>

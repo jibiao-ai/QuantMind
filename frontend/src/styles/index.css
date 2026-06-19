@@ -118,3 +118,91 @@ body {
   border: 1px solid #E5E7EB !important;
   box-shadow: 0 10px 25px rgba(0, 0, 0, 0.1) !important;
 }
+
+/* ============ Mobile Responsive ============ */
+
+/* Safe area insets for iPhone notch/home indicator */
+@supports (padding: env(safe-area-inset-top)) {
+  .mobile-safe-top { padding-top: env(safe-area-inset-top); }
+  .mobile-safe-bottom { padding-bottom: env(safe-area-inset-bottom); }
+}
+
+/* Touch optimization - larger tap targets on mobile */
+@media (max-width: 767px) {
+  /* Prevent iOS zoom on input focus */
+  input, select, textarea {
+    font-size: 16px !important;
+  }
+
+  /* Larger touch targets */
+  button, a, [role="button"] {
+    min-height: 44px;
+    min-width: 44px;
+  }
+
+  /* Override for inline/small buttons */
+  .btn-sm, .text-xs button, table button, .pagination button {
+    min-height: 36px;
+    min-width: 36px;
+  }
+
+  /* Responsive tables - horizontal scroll */
+  table {
+    display: block;
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  /* Cards - full width on mobile */
+  .glass-card {
+    border-radius: 8px;
+  }
+
+  /* Prevent text overflow */
+  .truncate-mobile {
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+    max-width: 100%;
+  }
+
+  /* Hide scrollbar on mobile for cleaner look */
+  ::-webkit-scrollbar {
+    width: 0px;
+    height: 0px;
+  }
+
+  /* Smoother scrolling on iOS */
+  .overflow-y-auto, .overflow-x-auto {
+    -webkit-overflow-scrolling: touch;
+  }
+}
+
+/* Responsive grid helpers - make 12-col grids stack on mobile */
+@media (max-width: 767px) {
+  .mobile-grid-stack {
+    grid-template-columns: 1fr !important;
+  }
+  .mobile-grid-stack > [class*="col-span"] {
+    grid-column: span 1 !important;
+  }
+  .mobile-full {
+    width: 100% !important;
+    max-width: 100% !important;
+  }
+  .mobile-hidden {
+    display: none !important;
+  }
+  .mobile-p-2 {
+    padding: 0.5rem !important;
+  }
+  .mobile-p-3 {
+    padding: 0.75rem !important;
+  }
+  .mobile-text-xs {
+    font-size: 0.75rem !important;
+  }
+  .mobile-gap-2 {
+    gap: 0.5rem !important;
+  }
+}

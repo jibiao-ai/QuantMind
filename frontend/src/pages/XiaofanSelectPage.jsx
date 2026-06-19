@@ -273,7 +273,7 @@ export default function XiaofanSelectPage() {
 
   // Auto-rotation
   const [autoRotate, setAutoRotate] = useState(false)
-  const [rotateInterval, setRotateInterval] = useState(5) // minutes
+  const [rotateInterval, setRotateInterval] = useState(5) // minutes (auto-refresh is 5min)
   const [showRotateMenu, setShowRotateMenu] = useState(false)
   const rotateTimerRef = useRef(null)
 
@@ -331,7 +331,7 @@ export default function XiaofanSelectPage() {
 
   useEffect(() => {
     fetchQuotes()
-    const interval = setInterval(fetchQuotes, 60000) // 1分钟刷新
+    const interval = setInterval(fetchQuotes, 300000) // 5分钟刷新
     return () => clearInterval(interval)
   }, [fetchQuotes])
 
@@ -810,7 +810,7 @@ export default function XiaofanSelectPage() {
       {/* Footer info */}
       {activeStocks.length > 0 && (
         <div className={`text-center text-[10px] py-2 ${isFullscreen ? 'text-gray-600' : 'text-gray-400'}`}>
-          共 {activeStocks.length} 只 · 数据源：通达信 + 腾讯 + 东方财富 · 1分钟自动刷新
+          共 {activeStocks.length} 只 · 数据源：通达信 + 腾讯 + 东方财富 · 5分钟自动刷新
           {autoRotate && ` · 轮播中(${rotateInterval}分钟)`}
         </div>
       )}
