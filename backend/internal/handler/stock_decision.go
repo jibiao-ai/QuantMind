@@ -1549,3 +1549,118 @@ func generateStaticFallbackNews(code, name string) []gin.H {
 		},
 	}
 }
+
+// ==================== Master Judge (大师研判) ====================
+
+// MasterJudgeAnalyze handles POST /api/decision/master-judge
+func (h *Handler) MasterJudgeAnalyze(c *gin.Context) {
+	code := c.Query("code")
+	if code == "" {
+		var body struct {
+			Code string `json:"code"`
+		}
+		if err := c.BindJSON(&body); err == nil {
+			code = body.Code
+		}
+	}
+	if code == "" {
+		response.Error(c, 400, "股票代码不能为空")
+		return
+	}
+
+	code = strings.TrimSpace(code)
+
+	// 1. Get stock quote
+	quote := fetchStockQuoteForDecision(code)
+
+	// 2. Get AI config (server-side, unmasked)
+	aiBaseURL, aiKey, aiModel := getDecisionAIConfig()
+	if aiKey == "" {
+		response.Error(c, 500, "AI模型未配置，请在系统设置中配置API Key")
+		return
+	}
+
+	// Build comprehensive prompt for 65-master panel analysis
+	stockInfo := ""
+	if quote != nil {
+		stockInfo = fmt.Sprintf(`股票：%s（%s），现价：%.2f，涨跌幅：%.2f%%，昨收：%.2f，最高：%.2f，最低：%.2f`,
+			quote.Name, code, quote.Price, quote.ChangePct, quote.PreClose, quote.High, quote.Low)
+	} else {
+		stockInfo = fmt.Sprintf("股票代码：%s", code)
+	}
+
+	prompt := fmt.Sprintf(`你是一个专业的A股分析系统，模拟65位投资大师组成的评审团进行多维度深度研判。
+
+%s
+
+请严格按照以下JSON格式返回分析结果（只返回JSON，不要其他内容，不要markdown代码块）：
+{
+  "stock_name": "股票名称",
+  "overall_score": 65,
+  "verdict": "看多或看空或中性",
+  "core_conclusion": "一句话核心结论(30字以内)",
+  "dimensions": [
+    {"name": "估值", "score": 70, "comment": "简短评价(20字)"},
+    {"name": "趋势", "score": 60, "comment": "简短评价"},
+    {"name": "资金", "score": 55, "comment": "简短评价"},
+    {"name": "基本面", "score": 75, "comment": "简短评价"},
+    {"name": "情绪", "score": 50, "comment": "简短评价"},
+    {"name": "技术", "score": 65, "comment": "简短评价"},
+    {"name": "行业", "score": 70, "comment": "简短评价"},
+    {"name": "风险", "score": 45, "comment": "简短评价"}
+  ],
+  "bull_count": 38,
+  "bear_count": 18,
+  "neutral_count": 9,
+  "key_risks": ["风险1", "风险2", "风险3"],
+  "catalysts": ["催化剂1", "催化剂2"],
+  "target_price": {"bull": 0, "base": 0, "bear": 0},
+  "investment_horizon": "短期或中期或长期",
+  "confidence": 75
+}
+
+分析要求：
+1. overall_score: 0-100综合评分，基于8个维度加权
+2. verdict: 根据评分>60看多, <40看空, 其余中性
+3. bull_count + bear_count + neutral_count = 65
+4. dimensions中每个score在0-100之间
+5. target_price的三个价格要合理(基于现价估算)
+6. confidence在50-95之间`, stockInfo)
+
+	// Call AI
+	result := callLLMAPI(aiBaseURL, aiKey, aiModel, prompt)
+	if result == "" {
+		response.Error(c, 500, "AI分析请求失败，请检查AI模型配置")
+		return
+	}
+
+	// Parse response
+	cleaned := strings.TrimSpace(result)
+	cleaned = strings.TrimPrefix(cleaned, "```json")
+	cleaned = strings.TrimPrefix(cleaned, "```")
+	cleaned = strings.TrimSuffix(cleaned, "```")
+	cleaned = strings.TrimSpace(cleaned)
+
+	// Try to extract JSON object
+	startIdx := strings.Index(cleaned, "{")
+	endIdx := strings.LastIndex(cleaned, "}")
+	if startIdx >= 0 && endIdx > startIdx {
+		cleaned = cleaned[startIdx : endIdx+1]
+	}
+
+	var analysisResult map[string]interface{}
+	if err := json.Unmarshal([]byte(cleaned), &analysisResult); err != nil {
+		log.Printf("[MasterJudge] AI response parse error: %v, raw: %s", err, cleaned[:min(300, len(cleaned))])
+		response.Error(c, 500, "AI返回结果解析失败")
+		return
+	}
+
+	// Add stock name from quote if not present
+	if quote != nil {
+		if _, ok := analysisResult["stock_name"]; !ok || analysisResult["stock_name"] == "" {
+			analysisResult["stock_name"] = quote.Name
+		}
+	}
+
+	response.Success(c, analysisResult)
+}

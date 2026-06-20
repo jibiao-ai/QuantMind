@@ -140,6 +140,7 @@ func main() {
 
 		// AI买卖决策
 		auth.POST("/decision/analyze", h.AnalyzeStock)
+		auth.POST("/decision/master-judge", h.MasterJudgeAnalyze)
 		auth.GET("/decision/history", h.GetStockDecisionHistory)
 		auth.GET("/decision/market-review", h.GetMarketReviewAPI)
 		auth.POST("/decision/market-review", h.RunMarketReview)

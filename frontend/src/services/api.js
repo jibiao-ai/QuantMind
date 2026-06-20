@@ -139,6 +139,7 @@ export const hotMoneyBackfill = (params) => api.post('/market/hotmoney-backfill'
 
 // AI买卖决策
 export const analyzeStock = (data) => api.post('/decision/analyze', data)
+export const masterJudgeAnalyze = (data) => api.post('/decision/master-judge', data)
 export const getDecisionHistory = (params) => api.get('/decision/history', { params })
 export const getMarketReview = (params) => api.get('/decision/market-review', { params })
 export const runMarketReview = () => api.post('/decision/market-review')
