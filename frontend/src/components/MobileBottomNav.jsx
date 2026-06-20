@@ -13,8 +13,9 @@ export default function MobileBottomNav() {
   const { currentPage, setCurrentPage } = useStore()
 
   return (
-    <div className="md:hidden fixed bottom-0 left-0 right-0 z-30 bg-white border-t border-gray-200 safe-area-bottom">
-      <div className="flex items-center justify-around px-2 py-1" style={{ paddingBottom: 'env(safe-area-inset-bottom, 8px)' }}>
+    <div className="md:hidden fixed bottom-0 left-0 right-0 z-40 bg-white/95 backdrop-blur-md border-t border-gray-200"
+      style={{ paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
+      <div className="flex items-center justify-around px-1 py-1.5">
         {navItems.map(item => {
           const Icon = item.icon
           const active = currentPage === item.key
@@ -22,15 +23,15 @@ export default function MobileBottomNav() {
             <button 
               key={item.key}
               onClick={() => setCurrentPage(item.key)}
-              className={`flex flex-col items-center justify-center py-1.5 px-3 rounded-lg transition-all min-w-[56px]
-                ${active ? 'text-[#513CC8]' : 'text-gray-400'}`}
+              className={`relative flex flex-col items-center justify-center py-1 px-2 rounded-lg transition-all min-w-[52px]
+                ${active ? 'text-[#513CC8]' : 'text-gray-400 active:text-gray-600'}`}
             >
               <Icon size={20} strokeWidth={active ? 2.5 : 1.5} />
-              <span className={`text-[10px] mt-0.5 ${active ? 'font-semibold' : 'font-normal'}`}>
+              <span className={`text-[10px] mt-0.5 leading-tight ${active ? 'font-semibold' : 'font-normal'}`}>
                 {item.label}
               </span>
               {active && (
-                <div className="absolute bottom-1 w-5 h-0.5 rounded-full" style={{ background: '#513CC8' }} />
+                <div className="absolute -bottom-0.5 w-5 h-0.5 rounded-full" style={{ background: '#513CC8' }} />
               )}
             </button>
           )

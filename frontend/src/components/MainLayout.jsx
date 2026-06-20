@@ -20,6 +20,7 @@ import AIStockPickPage from '../pages/AIStockPickPage'
 import BroadcastPage from '../pages/BroadcastPage'
 import HotMoneyBoardPage from '../pages/HotMoneyBoardPage'
 import StockDecisionPage from '../pages/StockDecisionPage'
+import MasterJudgePage from '../pages/MasterJudgePage'
 import XiaofanSelectPage from '../pages/XiaofanSelectPage'
 import { Menu } from 'lucide-react'
 
@@ -29,6 +30,7 @@ const pageMap = {
   'broadcast': BroadcastPage,
   'hotmoney-board': HotMoneyBoardPage,
   'stock-decision': StockDecisionPage,
+  'master-judge': MasterJudgePage,
   'watchlist': WatchlistPage,
   'hot-list': HotListPage,
   'ai-stock-pick': AIStockPickPage,
@@ -56,6 +58,7 @@ const pageTitles = {
   'broadcast': '股市播报',
   'hotmoney-board': '游资打板',
   'stock-decision': '买卖决策',
+  'master-judge': '大师研判',
   'watchlist': '自选个股',
   'hot-list': '市场热榜',
   'ai-stock-pick': '隔夜套利',
@@ -75,17 +78,17 @@ export default function MainLayout() {
       <Sidebar />
       <div className="flex-1 overflow-hidden flex flex-col">
         {/* Mobile Header */}
-        <div className="md:hidden flex items-center justify-between px-4 py-3 border-b border-gray-200 bg-white sticky top-0 z-30">
+        <div className="md:hidden flex items-center px-3 py-2.5 border-b border-gray-200 bg-white/95 backdrop-blur-md sticky top-0 z-30">
           <button 
             onClick={toggleMobileMenu}
-            className="p-2 rounded-lg text-gray-600 hover:text-[#513CC8] hover:bg-[#F0EDFA] transition"
+            className="w-9 h-9 flex items-center justify-center rounded-lg text-gray-600 hover:text-[#513CC8] hover:bg-[#F0EDFA] transition flex-shrink-0"
           >
-            <Menu size={22} />
+            <Menu size={20} />
           </button>
-          <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg flex items-center justify-center"
+          <div className="flex-1 flex items-center justify-center gap-1.5">
+            <div className="w-6 h-6 rounded-md flex items-center justify-center"
               style={{ background: '#513CC8' }}>
-              <svg width="16" height="16" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
+              <svg width="14" height="14" viewBox="0 0 32 32" fill="none" xmlns="http://www.w3.org/2000/svg">
                 <path d="M16 5C9.9 5 5 9.9 5 16s4.9 11 11 11c2.4 0 4.7-.8 6.5-2.1l2.6 2.6c.4.4 1.1.4 1.6 0 .4-.4.4-1.1 0-1.6l-2.6-2.6C25.2 21.5 27 18.9 27 16c0-6.1-4.9-11-11-11z" fill="none" stroke="white" strokeWidth="2.2"/>
                 <path d="M18 10l-4 6.5h3l-1 5.5 4.5-7h-3l1-5z" fill="white"/>
               </svg>
@@ -94,11 +97,11 @@ export default function MainLayout() {
               {pageTitles[currentPage] || 'QuantMind'}
             </span>
           </div>
-          <div className="w-10" /> {/* Spacer for centering */}
+          <div className="w-9 h-9 flex-shrink-0" /> {/* Symmetric spacer matching menu button */}
         </div>
 
         {/* Page Content */}
-        <div className="flex-1 overflow-y-auto pb-16 md:pb-0">
+        <div className="flex-1 overflow-y-auto pb-20 md:pb-0">
           <ErrorBoundary>
             <PageComponent />
           </ErrorBoundary>

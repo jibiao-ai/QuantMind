@@ -11,6 +11,7 @@ const menuItems = [
   { key: 'broadcast', label: '股市播报', icon: Radio, group: '市场总览' },
   { key: 'hotmoney-board', label: '游资打板', icon: Zap, group: '市场总览' },
   { key: 'stock-decision', label: '买卖决策', icon: Brain, group: '市场总览' },
+  { key: 'master-judge', label: '大师研判', icon: Crown, group: '市场总览' },
   { key: 'watchlist', label: '自选个股', icon: Star, group: '市场总览' },
   { key: 'hot-list', label: '市场热榜', icon: Flame, group: '市场总览' },
   { key: 'ai-stock-pick', label: '隔夜套利', icon: Target, group: '市场总览' },
