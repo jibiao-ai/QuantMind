@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useRef } from 'react'
-import { getSystemSettings, getDataQuote, getDataKline } from '../services/api'
+import { useState, useCallback } from 'react'
+import { masterJudgeAnalyze } from '../services/api'
 import { 
   Search, Loader2, RefreshCw, Lightbulb, TrendingUp, TrendingDown, Minus,
   Clock, BarChart3, Shield, Zap, Users, Globe, Activity, Target
@@ -232,25 +232,8 @@ export default function MasterJudgePage() {
   const [result, setResult] = useState(null)
   const [timeline, setTimeline] = useState([])
   const [verdicts, setVerdicts] = useState({}) // { masterId: 'bullish'|'bearish'|'neutral' }
-  const apiRef = useRef(null)
 
-  // Load AI settings
-  const getAIConfig = async () => {
-    try {
-      const res = await getSystemSettings()
-      if (res?.data?.code === 0) {
-        const settings = res.data.data || {}
-        return {
-          baseUrl: settings.ai_decision_base_url || 'https://api.deepseek.com/v1',
-          apiKey: settings.ai_decision_api_key || '',
-          model: settings.ai_decision_model || 'deepseek-chat',
-        }
-      }
-    } catch (e) { console.error('Load AI config failed:', e) }
-    return { baseUrl: 'https://api.deepseek.com/v1', apiKey: '', model: 'deepseek-chat' }
-  }
-
-  // Simulate master analysis with AI
+  // Master analysis via backend API (AI call happens server-side)
   const runAnalysis = async () => {
     const code = stockCode.replace(/\D/g, '')
     if (!code || code.length !== 6) {
@@ -268,113 +251,26 @@ export default function MasterJudgePage() {
     const addTimeline = (event) => setTimeline(prev => [...prev, event])
 
     try {
-      // Phase 1: Fetch stock data
+      // Phase 1: Call backend API
       addTimeline({ time: '00:00', phase: '数据采集', type: 'info', content: `开始采集 ${code} 市场数据...` })
-      setProgress(5)
+      setProgress(10)
 
-      const [quoteRes, klineRes] = await Promise.allSettled([
-        getDataQuote({ codes: code }),
-        getDataKline({ code, period: 'day', count: 60 }),
-      ])
-
-      const quote = quoteRes.status === 'fulfilled' && quoteRes.value?.code === 0
-        ? (Array.isArray(quoteRes.value.data) ? quoteRes.value.data[0] : quoteRes.value.data?.quotes?.[0]) : null
-      const klines = klineRes.status === 'fulfilled' && klineRes.value?.code === 0
-        ? (klineRes.value.data?.klines || klineRes.value.data || []) : []
-
-      if (quote) setStockName(quote.name || code)
-      setProgress(15)
-      addTimeline({ time: '00:02', phase: '数据就绪', type: 'info', content: `行情数据获取完成：现价 ${quote?.price || '—'}，涨跌 ${quote?.change_pct?.toFixed(2) || '—'}%` })
-
-      // Phase 2: AI Analysis
       setPhase('AI深度分析...')
-      const config = await getAIConfig()
-      if (!config.apiKey) {
-        toast.error('请先在系统设置中配置AI模型API Key')
-        setAnalyzing(false)
-        return
+      addTimeline({ time: '00:03', phase: 'AI研判', type: 'info', content: '调用AI模型进行多维度深度分析...' })
+      setProgress(20)
+
+      const res = await masterJudgeAnalyze({ code })
+      const analysisResult = res?.data?.data || res?.data
+
+      if (!analysisResult || analysisResult.code === -1) {
+        throw new Error(analysisResult?.message || 'AI分析请求失败')
       }
 
-      setProgress(25)
-      addTimeline({ time: '00:05', phase: 'AI研判', type: 'info', content: `调用 ${config.model} 进行多维度深度分析...` })
-
-      // Build prompt
-      const stockInfo = quote 
-        ? `股票：${quote.name}(${code})，现价：${quote.price}，涨跌幅：${quote.change_pct?.toFixed(2)}%，市盈率PE：${quote.pe || '—'}，市净率PB：${quote.pb || '—'}，换手率：${quote.turnover_rate || '—'}%，成交量：${quote.volume || '—'}`
-        : `股票代码：${code}`
-      const klineInfo = klines.length > 0 
-        ? `近60日K线概要：最高${Math.max(...klines.map(k => k.high)).toFixed(2)}，最低${Math.min(...klines.map(k => k.low)).toFixed(2)}，近5日均价${(klines.slice(-5).reduce((s, k) => s + k.close, 0) / 5).toFixed(2)}`
-        : ''
-
-      const prompt = `你是一个专业的A股分析系统。请对以下股票进行全面的投资研判分析。
-
-${stockInfo}
-${klineInfo}
-
-请严格按照以下JSON格式返回分析结果（只返回JSON，不要其他内容）：
-{
-  "stock_name": "股票名称",
-  "overall_score": 65,
-  "verdict": "看多|看空|中性",
-  "core_conclusion": "一句话核心结论",
-  "dimensions": [
-    {"name": "估值", "score": 70, "comment": "简短评价"},
-    {"name": "趋势", "score": 60, "comment": "简短评价"},
-    {"name": "资金", "score": 55, "comment": "简短评价"},
-    {"name": "基本面", "score": 75, "comment": "简短评价"},
-    {"name": "情绪", "score": 50, "comment": "简短评价"},
-    {"name": "技术", "score": 65, "comment": "简短评价"},
-    {"name": "行业", "score": 70, "comment": "简短评价"},
-    {"name": "风险", "score": 45, "comment": "简短评价"}
-  ],
-  "bull_count": 38,
-  "bear_count": 18,
-  "neutral_count": 9,
-  "key_risks": ["风险1", "风险2", "风险3"],
-  "catalysts": ["催化剂1", "催化剂2"],
-  "target_price": {"bull": 0, "base": 0, "bear": 0},
-  "investment_horizon": "短期|中期|长期",
-  "confidence": 75
-}`
-
-      // Call AI API
-      const response = await fetch(`${config.baseUrl}/chat/completions`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${config.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.model,
-          messages: [{ role: 'user', content: prompt }],
-          temperature: 0.3,
-          max_tokens: 2000,
-        }),
-      })
-
-      setProgress(60)
-      
-      if (!response.ok) {
-        throw new Error(`AI API error: ${response.status}`)
-      }
-
-      const aiData = await response.json()
-      const content = aiData.choices?.[0]?.message?.content || ''
-      
-      // Parse JSON from response
-      let analysisResult
-      try {
-        const jsonMatch = content.match(/\{[\s\S]*\}/)
-        analysisResult = JSON.parse(jsonMatch ? jsonMatch[0] : content)
-      } catch (e) {
-        throw new Error('AI返回格式解析失败')
-      }
-
-      setProgress(75)
+      setProgress(70)
       addTimeline({ time: '00:15', phase: 'AI分析完成', type: analysisResult.verdict === '看多' ? 'bullish' : analysisResult.verdict === '看空' ? 'bearish' : 'neutral',
         content: `AI综合评分 ${analysisResult.overall_score}/100，结论：${analysisResult.verdict}` })
 
-      // Phase 3: Simulate 65 masters voting
+      // Phase 2: Simulate 65 masters voting
       setPhase('大师评审中...')
       addTimeline({ time: '00:18', phase: '评审席就位', type: 'info', content: '65位投资大师开始逐一亮灯...' })
 
@@ -397,7 +293,7 @@ ${klineInfo}
         }
         
         setVerdicts(prev => ({ ...prev, [shuffled[i].id]: v }))
-        setProgress(75 + Math.floor((i / 65) * 20))
+        setProgress(70 + Math.floor((i / 65) * 25))
         await new Promise(r => setTimeout(r, 50))
       }
 
@@ -405,7 +301,7 @@ ${klineInfo}
       addTimeline({ time: '00:25', phase: '投票完成', type: 'info', 
         content: `看多 ${bullCount} 票 / 看空 ${bearCount} 票 / 中性 ${neutralCount} 票` })
 
-      // Phase 4: Final result
+      // Phase 3: Final result
       setProgress(100)
       setPhase('分析完成')
       setResult(analysisResult)
@@ -416,8 +312,9 @@ ${klineInfo}
 
     } catch (err) {
       console.error('Analysis failed:', err)
-      toast.error(err.message || '分析失败，请检查AI配置')
-      addTimeline({ time: '—', phase: '错误', type: 'neutral', content: err.message || '分析异常终止' })
+      const errMsg = err?.response?.data?.message || err.message || '分析失败，请检查AI配置'
+      toast.error(errMsg)
+      addTimeline({ time: '—', phase: '错误', type: 'neutral', content: errMsg })
     }
     setAnalyzing(false)
   }
