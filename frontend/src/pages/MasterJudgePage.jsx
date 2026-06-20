@@ -674,7 +674,7 @@ export default function MasterJudgePage() {
         <div className="glass-card p-3">
           <AnalysisSteps steps={steps} currentStep={currentStep} />
         </div>
-        {/* Live voting preview */}
+        {/* Live voting preview - only 3 rows of 8 lights */}
         {Object.keys(verdicts).length > 0 && (
           <div className="glass-card p-3">
             <div className="flex items-center gap-2 mb-2">
@@ -682,12 +682,15 @@ export default function MasterJudgePage() {
               <span className="text-[10px] font-medium text-gray-600">评审投票中...</span>
               <span className="text-[9px] text-gray-400">{Object.keys(verdicts).length}/65</span>
             </div>
-            <div className="grid grid-cols-16 gap-0.5">
-              {MASTERS.slice(0, 32).map(m => (
-                <div key={m.id} className={`w-3 h-3 rounded-full transition-all ${
-                  verdicts[m.id] === 'bullish' ? 'bg-red-400' : verdicts[m.id] === 'bearish' ? 'bg-green-400' : verdicts[m.id] === 'neutral' ? 'bg-gray-300' : 'bg-gray-100'
+            <div className="grid grid-cols-8 gap-1">
+              {MASTERS.slice(0, 24).map(m => (
+                <div key={m.id} className={`w-4 h-4 rounded-full transition-all duration-300 ${
+                  verdicts[m.id] === 'bullish' ? 'bg-red-400 shadow-sm shadow-red-200' : verdicts[m.id] === 'bearish' ? 'bg-green-400 shadow-sm shadow-green-200' : verdicts[m.id] === 'neutral' ? 'bg-gray-300' : 'bg-gray-100'
                 }`} />
               ))}
+            </div>
+            <div className="text-center mt-1.5">
+              <span className="text-[9px] text-gray-400">... 共65位大师投票</span>
             </div>
           </div>
         )}
@@ -708,14 +711,21 @@ export default function MasterJudgePage() {
                 <span className="text-sm md:text-base font-bold text-gray-800">{result.stock_name || stockCode}</span>
                 <span className="text-[10px] text-gray-400 bg-gray-100 px-1.5 py-0.5 rounded">{stockCode}</span>
               </div>
-              {result.target_price && (
-                <div className="flex items-center gap-2 mt-0.5 text-[10px]">
-                  <span className="text-gray-400">目标价</span>
-                  <span className="text-red-500">↑{result.target_price.bull || '—'}</span>
-                  <span className="text-gray-600">{result.target_price.base || '—'}</span>
-                  <span className="text-green-500">↓{result.target_price.bear || '—'}</span>
+              {/* Optimistic / Base / Pessimistic Prices */}
+              <div className="flex items-center gap-3 mt-1">
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-red-500 font-medium">乐观价</span>
+                  <span className="text-xs font-bold text-red-500">{result.target_price?.bull || '—'}</span>
                 </div>
-              )}
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-gray-400 font-medium">基准价</span>
+                  <span className="text-xs font-bold text-gray-500">{result.target_price?.base || '—'}</span>
+                </div>
+                <div className="flex items-center gap-1">
+                  <span className="text-[10px] text-green-500 font-medium">悲观价</span>
+                  <span className="text-xs font-bold text-green-500">{result.target_price?.bear || '—'}</span>
+                </div>
+              </div>
             </div>
           </div>
           {/* Right: Score rings */}
@@ -777,35 +787,35 @@ export default function MasterJudgePage() {
         </p>
       </div>
 
-      {/* MIDDLE 2: 4-column grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-2">
+      {/* MIDDLE 2: 4-column grid - takes 1/3 of viewport height */}
+      <div className="grid grid-cols-1 md:grid-cols-4 gap-2.5" style={{ minHeight: '33vh' }}>
         {/* Radar Chart */}
-        <div className="glass-card p-2">
-          <h4 className="text-[9px] font-semibold text-gray-500 mb-1 flex items-center gap-1">
-            <BarChart3 size={10} style={{ color: '#513CC8' }} /> 多维度
+        <div className="glass-card p-3">
+          <h4 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
+            <BarChart3 size={13} style={{ color: '#513CC8' }} /> 多维度分析
           </h4>
-          <div className="w-full max-w-[120px] mx-auto aspect-square">
+          <div className="w-full max-w-[140px] mx-auto aspect-square">
             <RadarChart dimensions={result.dimensions || []} />
           </div>
-          <div className="space-y-0.5 mt-1">
+          <div className="space-y-1 mt-2">
             {(result.dimensions || []).map((d, i) => (
-              <div key={i} className="flex items-center gap-1">
-                <span className="text-[7px] text-gray-500 w-6 text-right">{d.name}</span>
-                <div className="flex-1 h-1 bg-gray-100 rounded-full overflow-hidden">
-                  <div className="h-full rounded-full" style={{ width: `${d.score}%`, background: d.score >= 70 ? '#EF4444' : d.score >= 50 ? '#F59E0B' : '#22C55E' }} />
+              <div key={i} className="flex items-center gap-1.5">
+                <span className="text-[9px] text-gray-500 w-8 text-right">{d.name}</span>
+                <div className="flex-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+                  <div className="h-full rounded-full transition-all duration-700" style={{ width: `${d.score}%`, background: d.score >= 70 ? '#EF4444' : d.score >= 50 ? '#F59E0B' : '#22C55E' }} />
                 </div>
-                <span className="text-[7px] font-bold text-gray-500 w-4">{d.score}</span>
+                <span className="text-[9px] font-bold text-gray-600 w-5">{d.score}</span>
               </div>
             ))}
           </div>
         </div>
 
         {/* Thermometers */}
-        <div className="glass-card p-2">
-          <h4 className="text-[9px] font-semibold text-gray-500 mb-1 flex items-center gap-1">
-            <Activity size={10} style={{ color: '#513CC8' }} /> 情绪温度
+        <div className="glass-card p-3">
+          <h4 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
+            <Activity size={13} style={{ color: '#513CC8' }} /> 情绪温度
           </h4>
-          <div className="flex justify-around items-end py-2">
+          <div className="flex justify-around items-end py-3">
             {[
               { label: '情绪', key: '情绪' }, { label: '资金', key: '资金' }, { label: '风险', key: '风险' }
             ].map((t, i) => {
@@ -813,57 +823,73 @@ export default function MasterJudgePage() {
               const color = score >= 70 ? '#EF4444' : score >= 40 ? '#F59E0B' : '#22C55E'
               return (
                 <div key={i} className="flex flex-col items-center">
-                  <div className="w-4 h-20 rounded-full border border-gray-200 relative overflow-hidden bg-gray-50">
+                  <div className="w-5 h-24 rounded-full border border-gray-200 relative overflow-hidden bg-gray-50">
                     <div className="absolute bottom-0 left-0 right-0 rounded-full transition-all duration-1000" style={{ height: `${score}%`, background: color }} />
                   </div>
-                  <span className="text-[8px] font-bold mt-0.5" style={{ color }}>{score}</span>
-                  <span className="text-[7px] text-gray-400">{t.label}</span>
+                  <span className="text-[10px] font-bold mt-1" style={{ color }}>{score}</span>
+                  <span className="text-[9px] text-gray-400">{t.label}</span>
                 </div>
               )
             })}
           </div>
-          <div className="pt-1 border-t border-gray-100 text-center">
-            <span className="text-[8px] text-gray-400">置信度 <b className="text-[#513CC8]">{result.confidence}%</b></span>
-            <span className="text-[8px] text-gray-400 ml-2">周期 <b className="text-gray-600">{result.investment_horizon || '—'}</b></span>
+          <div className="pt-2 border-t border-gray-100 flex justify-around">
+            <span className="text-[10px] text-gray-400">看多 <b className="text-red-500">{result.bull_count || 0}</b></span>
+            <span className="text-[10px] text-gray-400">看空 <b className="text-green-500">{result.bear_count || 0}</b></span>
+            <span className="text-[10px] text-gray-400">置信 <b className="text-[#513CC8]">{result.confidence}%</b></span>
           </div>
         </div>
 
         {/* Timeline */}
-        <div className="glass-card p-2">
-          <h4 className="text-[9px] font-semibold text-gray-500 mb-1 flex items-center gap-1">
-            <Clock size={10} style={{ color: '#513CC8' }} /> 决议过程
+        <div className="glass-card p-3">
+          <h4 className="text-xs font-semibold text-gray-600 mb-2 flex items-center gap-1.5">
+            <Clock size={13} style={{ color: '#513CC8' }} /> 决策过程
           </h4>
-          <div className="relative pl-3 space-y-1 max-h-40 overflow-y-auto scrollbar-hide">
-            <div className="absolute left-1 top-0.5 bottom-0.5 w-px bg-gradient-to-b from-[#513CC8] to-gray-200" />
+          <div className="relative pl-4 space-y-2 max-h-52 overflow-y-auto scrollbar-hide">
+            <div className="absolute left-1.5 top-1 bottom-1 w-px bg-gradient-to-b from-[#513CC8] via-purple-300 to-gray-200" />
             {timeline.map((event, i) => (
               <div key={i} className="relative">
-                <div className={`absolute -left-2 top-1 w-1.5 h-1.5 rounded-full ${
+                <div className={`absolute -left-2.5 top-1 w-2 h-2 rounded-full border-2 border-white ${
                   event.type === 'bullish' ? 'bg-red-500' : event.type === 'bearish' ? 'bg-green-500' : event.type === 'info' ? 'bg-[#513CC8]' : 'bg-gray-400'
                 }`} />
-                <p className="text-[8px] text-gray-600 leading-tight pl-1">{event.content}</p>
+                <div className="pl-1">
+                  <p className="text-[9px] font-medium text-gray-500">{event.time} · {event.phase}</p>
+                  <p className="text-[10px] text-gray-700 leading-snug">{event.content}</p>
+                </div>
               </div>
             ))}
           </div>
         </div>
 
         {/* Risks + Catalysts */}
-        <div className="glass-card p-2">
-          <div className="space-y-1.5">
+        <div className="glass-card p-3">
+          <div className="space-y-3">
             <div>
-              <h4 className="text-[9px] font-semibold text-red-600 mb-0.5 flex items-center gap-0.5">
-                <Shield size={9} /> 风险
+              <h4 className="text-xs font-semibold text-red-600 mb-1.5 flex items-center gap-1">
+                <Shield size={11} className="text-red-500" /> 核心风险
               </h4>
-              {(result.key_risks || []).map((risk, i) => (
-                <p key={i} className="text-[8px] text-gray-600 leading-tight pl-2 border-l border-red-200 mb-0.5">{risk}</p>
-              ))}
+              <div className="space-y-1">
+                {(result.key_risks || []).map((risk, i) => (
+                  <div key={i} className="px-2 py-1 rounded-md bg-red-50/80 border border-red-100">
+                    <p className="text-[10px] text-gray-700 leading-snug">{risk}</p>
+                  </div>
+                ))}
+              </div>
             </div>
             <div>
-              <h4 className="text-[9px] font-semibold text-[#513CC8] mb-0.5 flex items-center gap-0.5">
-                <Zap size={9} /> 催化剂
+              <h4 className="text-xs font-semibold text-[#513CC8] mb-1.5 flex items-center gap-1">
+                <Zap size={11} className="text-[#513CC8]" /> 催化剂
               </h4>
-              {(result.catalysts || []).map((cat, i) => (
-                <p key={i} className="text-[8px] text-gray-600 leading-tight pl-2 border-l border-[#513CC8]/30 mb-0.5">{cat}</p>
-              ))}
+              <div className="space-y-1">
+                {(result.catalysts || []).map((cat, i) => (
+                  <div key={i} className="px-2 py-1 rounded-md bg-purple-50/80 border border-purple-100">
+                    <p className="text-[10px] text-gray-700 leading-snug">{cat}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div className="pt-1 border-t border-gray-100 text-right">
+              <span className="text-[9px] text-gray-400">周期: <b className="text-gray-600">{result.investment_horizon || '中期'}</b></span>
+              <span className="text-[9px] text-gray-400 ml-2">置信: <b className="text-[#513CC8]">{result.confidence}%</b></span>
             </div>
           </div>
         </div>
