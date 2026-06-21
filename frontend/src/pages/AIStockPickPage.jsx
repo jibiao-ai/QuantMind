@@ -383,6 +383,15 @@ function ScreeningProcess({ batches, stats }) {
           </div>
         )}
 
+        {!isFailed && latestBatch.error_msg && latestBatch.error_msg.startsWith('数据源:') && (
+          <div className="mb-3 px-3 py-1.5 rounded-lg bg-blue-50 border border-blue-100">
+            <p className="text-[10px] text-blue-600 flex items-center gap-1">
+              <span>📡</span>
+              {latestBatch.error_msg}
+            </p>
+          </div>
+        )}
+
         {/* Step-by-step funnel visualization */}
         <div className="relative">
           {/* Connection line */}
