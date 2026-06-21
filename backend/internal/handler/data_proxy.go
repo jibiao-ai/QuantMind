@@ -66,7 +66,7 @@ func (h *Handler) GetDataQuote(c *gin.Context) {
 }
 
 // GetDataKline - 获取K线数据 (mootdx)
-// Frontend sends period: day/week/month/year, Python expects freq: daily/weekly/monthly
+// Frontend sends period: day/week/month, Python expects freq: daily/weekly/monthly
 func (h *Handler) GetDataKline(c *gin.Context) {
 	period := c.Query("period")
 	count := c.Query("count")
