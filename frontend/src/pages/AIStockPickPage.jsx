@@ -109,6 +109,9 @@ export default function AIStockPickPage() {
       {/* ==================== 八步筛选条件 ==================== */}
       <EightStepConditions />
 
+      {/* ==================== 筛选过程展示 (Screening Process) ==================== */}
+      <ScreeningProcess batches={batches} stats={stats} />
+
       {/* ==================== Stats Cards ==================== */}
       <StatsCards stats={stats} batches={batches} />
 
@@ -313,6 +316,135 @@ function EightStepConditions() {
           </div>
         </div>
       )}
+    </div>
+  )
+}
+
+// ==================== 筛选过程展示 (Screening Process Visualization) ====================
+
+function ScreeningProcess({ batches, stats }) {
+  const latestBatch = batches?.[0]
+  
+  if (!latestBatch) {
+    return (
+      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Filter size={15} className="text-[#513CC8]" />
+          <span className="text-sm font-medium text-gray-900">筛选过程跟踪</span>
+        </div>
+        <div className="text-center py-6">
+          <AlertTriangle size={24} className="mx-auto mb-2 text-amber-400" />
+          <p className="text-sm text-gray-500">暂无筛选记录</p>
+          <p className="text-xs text-gray-400 mt-1">点击"立即筛选"启动八步筛选流程，每步结果将实时展示</p>
+        </div>
+      </div>
+    )
+  }
+
+  const steps = [
+    { num: 0, title: '获取数据', desc: '全市场A股实时行情', count: latestBatch.total_stocks, color: '#6B7280' },
+    { num: 1, title: '主板非ST', desc: '仅上海/深圳主板', count: latestBatch.main_board, color: '#2563EB' },
+    { num: 2, title: '涨幅3%-5%', desc: '最佳上升动能区间', count: latestBatch.pct_filter, color: '#16A34A' },
+    { num: 3, title: '近期涨停', desc: '近20日有涨停记录', count: latestBatch.limit_filter, color: '#DC2626' },
+    { num: 4, title: '量比>1', desc: '成交活跃度高', count: latestBatch.volume_filter, color: '#9333EA' },
+    { num: 5, title: '换手5%-10%', desc: '筹码充分交换', count: latestBatch.turnover_filter, color: '#0891B2' },
+    { num: 6, title: '市值50-200亿', desc: '中盘股弹性足', count: latestBatch.market_cap_filter, color: '#CA8A04' },
+    { num: 7, title: '分时+尾盘', desc: '走势确认+尾盘信号', count: latestBatch.result_count, color: '#7C3AED' },
+  ]
+
+  const isFailed = latestBatch.status === 'failed'
+  const isRunning = latestBatch.status === 'running'
+
+  return (
+    <div className="bg-white rounded-xl border border-gray-100 shadow-sm overflow-hidden">
+      <div className="p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <Filter size={15} className="text-[#513CC8]" />
+            <span className="text-sm font-medium text-gray-900">筛选过程跟踪</span>
+            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${
+              isFailed ? 'bg-red-100 text-red-600' : isRunning ? 'bg-amber-100 text-amber-600' : 'bg-green-100 text-green-600'
+            }`}>
+              {isFailed ? '失败' : isRunning ? '运行中' : '完成'}
+            </span>
+          </div>
+          <span className="text-[10px] text-gray-400">
+            {latestBatch.trade_date} {latestBatch.screen_time}
+          </span>
+        </div>
+
+        {isFailed && latestBatch.error_msg && (
+          <div className="mb-3 px-3 py-2 rounded-lg bg-red-50 border border-red-200">
+            <p className="text-xs text-red-700 flex items-center gap-1.5">
+              <AlertTriangle size={12} />
+              <span className="font-medium">筛选失败：</span>
+              {latestBatch.error_msg}
+            </p>
+          </div>
+        )}
+
+        {/* Step-by-step funnel visualization */}
+        <div className="relative">
+          {/* Connection line */}
+          <div className="absolute top-4 left-0 right-0 h-0.5 bg-gray-100 z-0" style={{ marginLeft: '3.5%', marginRight: '3.5%' }}></div>
+          
+          <div className="grid grid-cols-8 gap-1 relative z-10">
+            {steps.map((step, i) => {
+              const hasData = step.count > 0
+              const prevCount = i > 0 ? steps[i - 1].count : step.count
+              const filterRate = prevCount > 0 ? ((step.count / prevCount) * 100).toFixed(0) : '0'
+              
+              return (
+                <div key={step.num} className="flex flex-col items-center">
+                  {/* Circle indicator */}
+                  <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[10px] font-bold border-2 mb-1 transition-all ${
+                    hasData 
+                      ? 'text-white shadow-sm' 
+                      : 'bg-gray-100 text-gray-400 border-gray-200'
+                  }`} style={hasData ? { background: step.color, borderColor: step.color } : {}}>
+                    {step.num === 0 ? '⓪' : step.num}
+                  </div>
+                  
+                  {/* Count */}
+                  <span className={`text-xs font-bold ${hasData ? 'text-gray-900' : 'text-gray-300'}`}>
+                    {step.count || 0}
+                  </span>
+                  
+                  {/* Title */}
+                  <span className="text-[9px] text-gray-500 text-center leading-tight mt-0.5">
+                    {step.title}
+                  </span>
+                  
+                  {/* Filter rate (except first step) */}
+                  {i > 0 && (
+                    <span className={`text-[8px] mt-0.5 ${
+                      hasData ? (parseInt(filterRate) > 50 ? 'text-green-500' : parseInt(filterRate) > 10 ? 'text-amber-500' : 'text-red-500') : 'text-gray-300'
+                    }`}>
+                      {hasData ? `${filterRate}%` : '—'}
+                    </span>
+                  )}
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Summary */}
+        <div className="mt-3 pt-3 border-t border-gray-100 flex items-center justify-between">
+          <div className="flex items-center gap-4 text-[10px] text-gray-500">
+            <span>全市场 <b className="text-gray-700">{latestBatch.total_stocks || 0}</b> 只</span>
+            <span>→ 最终通过 <b className="text-[#513CC8]">{latestBatch.result_count || 0}</b> 只</span>
+            <span>通过率 <b className="text-[#513CC8]">
+              {latestBatch.total_stocks > 0 ? ((latestBatch.result_count / latestBatch.total_stocks) * 100).toFixed(2) : '0'}%
+            </b></span>
+          </div>
+          {latestBatch.total_stocks === 0 && (
+            <span className="text-[10px] px-2 py-0.5 rounded-full bg-red-100 text-red-600 font-medium">
+              ⚠ 未获取到行情数据
+            </span>
+          )}
+        </div>
+      </div>
     </div>
   )
 }

@@ -66,11 +66,37 @@ func (h *Handler) GetDataQuote(c *gin.Context) {
 }
 
 // GetDataKline - 获取K线数据 (mootdx)
+// Frontend sends period: day/week/month/year, Python expects freq: daily/weekly/monthly
 func (h *Handler) GetDataKline(c *gin.Context) {
+	period := c.Query("period")
+	count := c.Query("count")
+
+	// Map frontend period names to Python service freq names
+	freqMap := map[string]string{
+		"day":   "daily",
+		"week":  "weekly",
+		"month": "monthly",
+		"year":  "monthly", // no yearly in mootdx, use monthly with larger count
+		// Also support direct freq names for backward compatibility
+		"daily":   "daily",
+		"weekly":  "weekly",
+		"monthly": "monthly",
+	}
+
+	freq := freqMap[period]
+	if freq == "" {
+		freq = "daily" // default
+	}
+
+	// For year period, use monthly with larger count to cover ~5 years
+	if period == "year" && (count == "" || count == "60") {
+		count = "120" // 120 months = 10 years of monthly data
+	}
+
 	proxyToDataService(c, "/kline", map[string]string{
-		"code":   c.Query("code"),
-		"period": c.Query("period"),
-		"count":  c.Query("count"),
+		"code":  c.Query("code"),
+		"freq":  freq,
+		"count": count,
 	})
 }
 
