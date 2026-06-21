@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef, useMemo } from 'react'
 import { 
   getXiaofanCategories, createXiaofanCategory, updateXiaofanCategory, deleteXiaofanCategory,
   addXiaofanStock, removeXiaofanStock, getDataQuote, getDataKline, getDataResearch,
-  getDataNews, getDataAnnounce, getChipDistribution, validateStockCode, getGubaDiscussion
+  getDataNews, getDataAnnounce, getChipDistribution, validateStockCode, getGubaDiscussion,
+  getDataMinute
 } from '../services/api'
 import { 
   Plus, Trash2, RefreshCw, Search, X, BarChart3, MessageCircle, FileText, 
@@ -155,6 +156,172 @@ function KlineChart({ klines, title, compact = false, darkMode = true }) {
   )
 }
 
+// ==================== 分时图组件 ====================
+function MinuteChart({ data, compact = false, darkMode = true }) {
+  const canvasRef = useRef(null)
+  const containerRef = useRef(null)
+  const H = compact ? 180 : 260
+
+  useEffect(() => {
+    const canvas = canvasRef.current
+    if (!canvas || !data) return
+    const container = containerRef.current
+    if (!container) return
+
+    // Parse minute data - could be array of { time, price, avg_price, volume } or raw array
+    let minutes = []
+    if (Array.isArray(data)) {
+      minutes = data
+    } else if (data.minutes) {
+      minutes = data.minutes
+    } else if (data.data) {
+      minutes = data.data
+    }
+
+    if (minutes.length === 0) return
+
+    const dpr = window.devicePixelRatio || 1
+    const W = container.getBoundingClientRect().width || 300
+    canvas.width = W * dpr
+    canvas.height = H * dpr
+    canvas.style.width = W + 'px'
+    canvas.style.height = H + 'px'
+
+    const ctx = canvas.getContext('2d')
+    ctx.scale(dpr, dpr)
+    ctx.clearRect(0, 0, W, H)
+
+    const padL = compact ? 35 : 45
+    const padR = 5
+    const padT = compact ? 8 : 14
+    const padB = compact ? 14 : 20
+    const volH = compact ? 25 : 40
+
+    const chartW = W - padL - padR
+    const chartH = H - padT - padB - volH - 5
+
+    // Background
+    ctx.fillStyle = darkMode ? '#0f0f14' : '#ffffff'
+    ctx.fillRect(0, 0, W, H)
+
+    // Parse prices
+    const prices = minutes.map(m => m.price || m.close || m.last_price || 0).filter(p => p > 0)
+    const avgPrices = minutes.map(m => m.avg_price || m.vwap || 0)
+    const volumes = minutes.map(m => m.volume || m.vol || 0)
+
+    if (prices.length === 0) return
+
+    // Get pre_close for reference line (use first price as fallback)
+    const preClose = data.pre_close || data.preClose || prices[0]
+    const allPriceValues = [...prices, ...avgPrices.filter(p => p > 0), preClose]
+    let minP = Math.min(...allPriceValues)
+    let maxP = Math.max(...allPriceValues)
+    const pPad = (maxP - minP) * 0.1 || 0.5
+    minP -= pPad; maxP += pPad
+
+    const priceToY = (p) => padT + ((maxP - p) / (maxP - minP)) * chartH
+    const maxVol = Math.max(...volumes, 1)
+
+    // Grid lines
+    ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.04)' : 'rgba(0,0,0,0.06)'
+    ctx.lineWidth = 0.5
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (chartH / 4) * i
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke()
+    }
+
+    // Pre-close reference line (dashed)
+    if (preClose > 0) {
+      const y = priceToY(preClose)
+      ctx.strokeStyle = darkMode ? 'rgba(255,255,255,0.2)' : 'rgba(0,0,0,0.2)'
+      ctx.setLineDash([3, 3])
+      ctx.beginPath(); ctx.moveTo(padL, y); ctx.lineTo(W - padR, y); ctx.stroke()
+      ctx.setLineDash([])
+    }
+
+    // Draw price line
+    const step = chartW / Math.max(prices.length - 1, 1)
+    
+    // Fill area above/below preclose
+    ctx.beginPath()
+    ctx.moveTo(padL, priceToY(prices[0]))
+    prices.forEach((p, i) => { ctx.lineTo(padL + i * step, priceToY(p)) })
+    ctx.lineTo(padL + (prices.length - 1) * step, priceToY(preClose))
+    ctx.lineTo(padL, priceToY(preClose))
+    ctx.closePath()
+    const lastPrice = prices[prices.length - 1]
+    ctx.fillStyle = lastPrice >= preClose ? (darkMode ? 'rgba(255,71,87,0.08)' : 'rgba(255,71,87,0.1)') : (darkMode ? 'rgba(46,213,115,0.08)' : 'rgba(46,213,115,0.1)')
+    ctx.fill()
+
+    // Price line
+    ctx.beginPath()
+    ctx.strokeStyle = lastPrice >= preClose ? '#ff4757' : '#2ed573'
+    ctx.lineWidth = 1.2
+    prices.forEach((p, i) => {
+      const x = padL + i * step
+      if (i === 0) ctx.moveTo(x, priceToY(p)); else ctx.lineTo(x, priceToY(p))
+    })
+    ctx.stroke()
+
+    // Average price line (yellow)
+    const validAvg = avgPrices.filter(p => p > 0)
+    if (validAvg.length > 0) {
+      ctx.beginPath()
+      ctx.strokeStyle = '#ffa502'
+      ctx.lineWidth = 1
+      let started = false
+      avgPrices.forEach((p, i) => {
+        if (p <= 0) return
+        const x = padL + i * step
+        if (!started) { ctx.moveTo(x, priceToY(p)); started = true } else ctx.lineTo(x, priceToY(p))
+      })
+      ctx.stroke()
+    }
+
+    // Volume bars
+    const volTop = H - volH
+    volumes.forEach((v, i) => {
+      if (v <= 0) return
+      const x = padL + i * step
+      const h = Math.max(1, (v / maxVol) * (volH - 5))
+      const isUp = i === 0 ? true : prices[i] >= prices[i - 1]
+      ctx.fillStyle = isUp ? 'rgba(255,71,87,0.4)' : 'rgba(46,213,115,0.4)'
+      ctx.fillRect(x - 0.5, volTop + (volH - 5) - h, Math.max(1, step * 0.6), h)
+    })
+
+    // Y-axis labels
+    ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.35)' : 'rgba(0,0,0,0.45)'
+    ctx.font = `${compact ? 8 : 9}px monospace`
+    ctx.textAlign = 'right'
+    for (let i = 0; i <= 4; i++) {
+      const y = padT + (chartH / 4) * i
+      const price = maxP - ((maxP - minP) / 4) * i
+      ctx.fillText(price.toFixed(2), padL - 3, y + 3)
+    }
+
+    // Title & latest price
+    ctx.fillStyle = darkMode ? 'rgba(255,255,255,0.5)' : 'rgba(0,0,0,0.5)'
+    ctx.font = `bold ${compact ? 9 : 10}px sans-serif`
+    ctx.textAlign = 'left'
+    ctx.fillText('分时', padL + 5, padT + 10)
+
+    if (lastPrice > 0 && preClose > 0) {
+      const pct = ((lastPrice - preClose) / preClose * 100)
+      const isUp = pct >= 0
+      ctx.fillStyle = isUp ? '#ff4757' : '#2ed573'
+      ctx.font = `bold ${compact ? 10 : 12}px monospace`
+      ctx.textAlign = 'right'
+      ctx.fillText(`${lastPrice.toFixed(2)} ${isUp ? '+' : ''}${pct.toFixed(2)}%`, W - padR - 5, padT + 12)
+    }
+  }, [data, compact, H, darkMode])
+
+  return (
+    <div ref={containerRef} className="rounded-lg overflow-hidden" style={{ background: darkMode ? '#0f0f14' : '#ffffff' }}>
+      <canvas ref={canvasRef} style={{ display: 'block', width: '100%', height: `${H}px`, cursor: 'crosshair' }} />
+    </div>
+  )
+}
+
 // ==================== 弹窗：股吧/新闻/公告 ====================
 function InfoModal({ open, onClose, title, loading, children }) {
   if (!open) return null
@@ -287,7 +454,8 @@ export default function XiaofanSelectPage() {
   const [modalLoading, setModalLoading] = useState(false)
 
   // K-line period display per stock
-  const [stockPeriod, setStockPeriod] = useState({}) // { code: 'day'|'week'|'month'|'year' }
+  const [stockPeriod, setStockPeriod] = useState({}) // { code: 'minute'|'day'|'week'|'month'|'year' }
+  const [minuteData, setMinuteData] = useState({}) // { code: minuteData[] }
 
   // === Load categories ===
   const loadCategories = useCallback(async () => {
@@ -525,11 +693,25 @@ export default function XiaofanSelectPage() {
     toast.success('已刷新')
   }
 
+  // === Fetch minute data for a stock ===
+  const fetchMinuteData = useCallback(async (code) => {
+    if (minuteData[code]) return // already loaded
+    try {
+      const res = await getDataMinute({ code })
+      if (res?.code === 0 && res.data) {
+        setMinuteData(prev => ({ ...prev, [code]: res.data }))
+      }
+    } catch (e) { console.error(`Fetch minute for ${code} failed`, e) }
+  }, [minuteData])
+
   // Get period for stock
   const getPeriod = (code) => stockPeriod[code] || 'day'
-  const setPeriodForStock = (code, period) => setStockPeriod(prev => ({ ...prev, [code]: period }))
+  const setPeriodForStock = (code, period) => {
+    setStockPeriod(prev => ({ ...prev, [code]: period }))
+    if (period === 'minute') fetchMinuteData(code)
+  }
 
-  const periodLabels = { day: '日K', week: '周K', month: '月K', year: '年K' }
+  const periodLabels = { minute: '分时', day: '日K', week: '周K', month: '月K', year: '年K' }
 
   return (
     <div ref={fullscreenRef} className={`p-4 space-y-4 min-h-screen ${isFullscreen ? 'bg-[#0a0a0f]' : ''}`} 
@@ -750,7 +932,7 @@ export default function XiaofanSelectPage() {
 
                 {/* Period selector */}
                 <div className={`px-3 py-1.5 flex gap-0.5 ${isFullscreen ? 'bg-gray-900' : 'bg-gray-50'}`}>
-                  {['day', 'week', 'month', 'year'].map(p => (
+                  {['minute', 'day', 'week', 'month', 'year'].map(p => (
                     <button key={p} onClick={() => setPeriodForStock(stock.code, p)}
                       className={`px-2 py-0.5 rounded text-[10px] font-medium transition ${
                         period === p
@@ -762,9 +944,17 @@ export default function XiaofanSelectPage() {
                   ))}
                 </div>
 
-                {/* K-line chart */}
+                {/* K-line / Minute chart */}
                 <div className="p-1.5">
-                  {isKlineLoading ? (
+                  {period === 'minute' ? (
+                    minuteData[stock.code] ? (
+                      <MinuteChart data={minuteData[stock.code]} compact={true} darkMode={isFullscreen} />
+                    ) : (
+                      <div className={`flex items-center justify-center ${isFullscreen ? 'text-gray-500' : 'text-gray-400'}`} style={{ height: '180px' }}>
+                        <Loader2 size={16} className="animate-spin mr-1.5" /><span className="text-xs">加载分时...</span>
+                      </div>
+                    )
+                  ) : isKlineLoading ? (
                     <div className={`flex items-center justify-center ${isFullscreen ? 'text-gray-500' : 'text-gray-400'}`} style={{ height: '180px' }}>
                       <Loader2 size={16} className="animate-spin mr-1.5" /><span className="text-xs">加载K线...</span>
                     </div>
