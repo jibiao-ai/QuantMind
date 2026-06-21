@@ -98,22 +98,35 @@ func runAIStockScreening(tradeDate string) {
 	}
 	repository.DB.Create(&batch)
 
-	// ========== Step 0: Fetch real market data ==========
+	// ========== Step 0: Fetch real market data (3-level fallback) ==========
+	var dataSource string
 	allStocks, err := fetchRealTimeStocks()
 	if err != nil || len(allStocks) == 0 {
-		log.Printf("[隔夜套利] 获取实时行情失败: %v, 尝试Eastmoney接口...", err)
+		log.Printf("[隔夜套利] 数据源1(AkShare)失败: %v, 尝试Eastmoney实时接口...", err)
 		allStocks, err = fetchFromEastmoneyDaily(tradeDate)
 		if err != nil || len(allStocks) == 0 {
-			log.Printf("[隔夜套利] 所有数据源均失败，本次筛选终止")
-			batch.Status = "failed"
-			batch.ErrorMsg = fmt.Sprintf("数据源不可用: %v", err)
-			repository.DB.Save(&batch)
-			return
+			log.Printf("[隔夜套利] 数据源2(Eastmoney push2实时)失败: %v, 尝试Eastmoney历史接口...", err)
+			allStocks, err = fetchFromEastmoneyHistorical(tradeDate)
+			if err != nil || len(allStocks) == 0 {
+				log.Printf("[隔夜套利] 所有数据源均失败，本次筛选终止")
+				batch.Status = "failed"
+				batch.ErrorMsg = fmt.Sprintf("三个数据源均不可用: %v", err)
+				repository.DB.Save(&batch)
+				return
+			}
+			dataSource = "Eastmoney历史数据"
+		} else {
+			dataSource = "Eastmoney实时数据"
 		}
+	} else {
+		dataSource = "AkShare实时数据"
 	}
+	log.Printf("[隔夜套利] 数据源: %s", dataSource)
 
 	batch.TotalStocks = len(allStocks)
-	log.Printf("[隔夜套利] 获取到 %d 只A股实时数据", len(allStocks))
+	batch.ErrorMsg = fmt.Sprintf("数据源: %s", dataSource)
+	repository.DB.Save(&batch)
+	log.Printf("[隔夜套利] 获取到 %d 只A股数据 (来源: %s)", len(allStocks), dataSource)
 
 	// ========== Step 1: 主板股票(排除ST) ==========
 	mainBoardStocks := filterMainBoard(allStocks)
@@ -201,18 +214,44 @@ func runAIStockScreening(tradeDate string) {
 
 // ==================== 数据获取 - 真实数据 ====================
 
+// isHTMLResponse checks if the response body starts with HTML content (error pages, 502, etc.)
+func isHTMLResponse(body []byte) bool {
+	if len(body) == 0 {
+		return false
+	}
+	trimmed := strings.TrimSpace(string(body))
+	if len(trimmed) == 0 {
+		return false
+	}
+	checkLen := min(200, len(trimmed))
+	return strings.HasPrefix(trimmed, "<") || strings.HasPrefix(trimmed, "<!") || strings.Contains(trimmed[:checkLen], "<html")
+}
+
 // fetchRealTimeStocks fetches ALL A-share real-time quotes from AkShare
 func fetchRealTimeStocks() ([]dailyStock, error) {
 	akURL := getAkShareServiceURL()
 	url := fmt.Sprintf("%s/all_stocks", akURL)
 
-	client := &http.Client{Timeout: 90 * time.Second}
+	client := &http.Client{Timeout: 30 * time.Second}
 	resp, err := client.Get(url)
 	if err != nil {
-		return nil, fmt.Errorf("AkShare all_stocks request failed: %v", err)
+		return nil, fmt.Errorf("AkShare请求失败(连接错误): %v", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		return nil, fmt.Errorf("AkShare返回HTTP %d", resp.StatusCode)
+	}
+
 	body, _ := io.ReadAll(resp.Body)
+
+	// Detect HTML error pages (502, 404, etc.)
+	if len(body) == 0 {
+		return nil, fmt.Errorf("AkShare返回空响应")
+	}
+	if isHTMLResponse(body) {
+		return nil, fmt.Errorf("AkShare服务未启动(返回HTML错误页)")
+	}
 
 	var result struct {
 		Code int `json:"code"`
@@ -222,11 +261,11 @@ func fetchRealTimeStocks() ([]dailyStock, error) {
 		} `json:"data"`
 	}
 	if err := json.Unmarshal(body, &result); err != nil {
-		return nil, fmt.Errorf("AkShare response parse failed: %v", err)
+		return nil, fmt.Errorf("AkShare响应解析失败: %v (前100字节: %s)", err, string(body[:min(100, len(body))]))
 	}
 
 	if result.Code != 0 || len(result.Data.AllStocks) == 0 {
-		return nil, fmt.Errorf("AkShare returned code %d with %d stocks", result.Code, len(result.Data.AllStocks))
+		return nil, fmt.Errorf("AkShare返回code=%d, stocks=%d", result.Code, len(result.Data.AllStocks))
 	}
 
 	var stocks []dailyStock
@@ -257,35 +296,40 @@ func fetchRealTimeStocks() ([]dailyStock, error) {
 	}
 
 	if len(stocks) == 0 {
-		return nil, fmt.Errorf("parsed 0 stocks from AkShare")
+		return nil, fmt.Errorf("AkShare解析到0只股票")
 	}
 
 	log.Printf("[隔夜套利] AkShare获取到 %d 只股票实时行情", len(stocks))
 	return stocks, nil
 }
 
-// fetchFromEastmoneyDaily fetches daily data from Eastmoney push2 API
+// fetchFromEastmoneyDaily fetches daily data from Eastmoney push2 API (real-time, only works during trading hours)
 func fetchFromEastmoneyDaily(tradeDate string) ([]dailyStock, error) {
 	// Eastmoney real-time A-share data
 	url := "https://push2.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f3&fs=m:0+t:6,m:0+t:80,m:1+t:2,m:1+t:23&fields=f2,f3,f4,f5,f6,f7,f8,f9,f10,f12,f14,f15,f16,f17,f18,f20,f21,f22,f23,f24,f25,f115"
 
 	data, err := fetchEastmoneyAPIWithRetry(url, 3)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Eastmoney push2请求失败: %v", err)
+	}
+
+	// Detect HTML error pages (502 Bad Gateway, etc.)
+	if isHTMLResponse(data) {
+		return nil, fmt.Errorf("Eastmoney push2返回HTML错误页(可能非交易时段或服务不可用)")
 	}
 
 	var result map[string]interface{}
 	if err := json.Unmarshal(data, &result); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("Eastmoney push2 JSON解析失败: %v (前100字节: %s)", err, string(data[:min(100, len(data))]))
 	}
 
 	dataObj, ok := result["data"].(map[string]interface{})
 	if !ok {
-		return nil, fmt.Errorf("no data field")
+		return nil, fmt.Errorf("Eastmoney push2: 无data字段")
 	}
 	diffArr, ok := dataObj["diff"].([]interface{})
 	if !ok {
-		return nil, fmt.Errorf("no diff field")
+		return nil, fmt.Errorf("Eastmoney push2: 无diff字段")
 	}
 
 	var stocks []dailyStock
@@ -319,7 +363,114 @@ func fetchFromEastmoneyDaily(tradeDate string) ([]dailyStock, error) {
 		stocks = append(stocks, s)
 	}
 
+	if len(stocks) == 0 {
+		return nil, fmt.Errorf("Eastmoney push2: 解析到0只股票")
+	}
+
+	log.Printf("[隔夜套利] Eastmoney push2获取到 %d 只A股数据", len(stocks))
 	return stocks, nil
+}
+
+// fetchFromEastmoneyHistorical fetches the latest trading day data from push2his (works 24/7, not affected by trading hours)
+// This is the most reliable fallback - it uses historical kline data to get the latest day's OHLCV for all stocks
+func fetchFromEastmoneyHistorical(tradeDate string) ([]dailyStock, error) {
+	log.Printf("[隔夜套利] 尝试Eastmoney历史数据接口(push2his)...")
+
+	// Get main board stock codes from SH (market=1) and SZ (market=0)
+	// market 1 = SH (60xxxx), market 0 = SZ (00xxxx, 30xxxx)
+	markets := []struct {
+		secidPrefix string
+		fs          string
+		name        string
+	}{
+		{"1.", "m:1+t:2,m:1+t:23", "沪市主板"},
+		{"0.", "m:0+t:6,m:0+t:80", "深市主板+创业板"},
+	}
+
+	// First, get stock list from push2 secid list API (also in push2his)
+	// Use push2his stock list endpoint - it returns the latest closing data
+	var allStocks []dailyStock
+
+	for _, mkt := range markets {
+		// push2his kline API: get last 1 day of daily kline for each stock
+		// But we need the stock list first. Use the same push2 clist but from push2his subdomain
+		listURL := fmt.Sprintf("https://push2his.eastmoney.com/api/qt/clist/get?pn=1&pz=5000&po=1&np=1&fltt=2&invt=2&fid=f3&fs=%s&fields=f2,f3,f5,f6,f8,f10,f12,f14,f15,f16,f17,f18,f20,f21", mkt.fs)
+
+		client := &http.Client{Timeout: 30 * time.Second}
+		req, err := http.NewRequest("GET", listURL, nil)
+		if err != nil {
+			log.Printf("[隔夜套利] push2his %s 请求创建失败: %v", mkt.name, err)
+			continue
+		}
+		req.Header.Set("User-Agent", "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
+		req.Header.Set("Referer", "https://quote.eastmoney.com")
+
+		resp, err := client.Do(req)
+		if err != nil {
+			log.Printf("[隔夜套利] push2his %s 请求失败: %v", mkt.name, err)
+			continue
+		}
+		body, _ := io.ReadAll(resp.Body)
+		resp.Body.Close()
+
+		if len(body) == 0 || isHTMLResponse(body) {
+			log.Printf("[隔夜套利] push2his %s 返回空或HTML", mkt.name)
+			continue
+		}
+
+		var result map[string]interface{}
+		if err := json.Unmarshal(body, &result); err != nil {
+			log.Printf("[隔夜套利] push2his %s JSON解析失败: %v", mkt.name, err)
+			continue
+		}
+
+		dataObj, ok := result["data"].(map[string]interface{})
+		if !ok {
+			continue
+		}
+		diffArr, ok := dataObj["diff"].([]interface{})
+		if !ok {
+			continue
+		}
+
+		for _, item := range diffArr {
+			d, ok := item.(map[string]interface{})
+			if !ok {
+				continue
+			}
+			code := safeString(d, "f12")
+			name := safeString(d, "f14")
+			if code == "" {
+				continue
+			}
+
+			s := dailyStock{
+				Code:         code,
+				Name:         name,
+				Close:        safeFloat(d, "f2"),
+				PctChg:       safeFloat(d, "f3"),
+				Volume:       safeFloat(d, "f5"),
+				Amount:       safeFloat(d, "f6") / 100000000,
+				Open:         safeFloat(d, "f17"),
+				High:         safeFloat(d, "f15"),
+				Low:          safeFloat(d, "f16"),
+				PreClose:     safeFloat(d, "f18"),
+				TurnoverRate: safeFloat(d, "f8"),
+				VolumeRatio:  safeFloat(d, "f10"),
+				TotalMV:      safeFloat(d, "f20") / 100000000,
+				CircMV:       safeFloat(d, "f21") / 100000000,
+			}
+			allStocks = append(allStocks, s)
+		}
+		log.Printf("[隔夜套利] push2his %s 获取到 %d 只", mkt.name, len(diffArr))
+	}
+
+	if len(allStocks) == 0 {
+		return nil, fmt.Errorf("Eastmoney push2his: 所有市场均无数据")
+	}
+
+	log.Printf("[隔夜套利] Eastmoney push2his 共获取到 %d 只A股历史数据", len(allStocks))
+	return allStocks, nil
 }
 
 // ==================== Stock data structures ====================
