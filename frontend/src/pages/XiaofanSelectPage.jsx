@@ -454,7 +454,8 @@ export default function XiaofanSelectPage() {
   const [modalLoading, setModalLoading] = useState(false)
 
   // K-line period display per stock
-  const [stockPeriod, setStockPeriod] = useState({}) // { code: 'minute'|'day'|'week'|'month'|'year' }
+  const [stockPeriod, setStockPeriod] = useState({}) // { code: 'minute'|'day'|'week'|'month' }
+  const [categoryPeriod, setCategoryPeriod] = useState('day') // global period for current category
   const [minuteData, setMinuteData] = useState({}) // { code: minuteData[] }
 
   // === Load categories ===
@@ -510,11 +511,10 @@ export default function XiaofanSelectPage() {
       if (stockKlines[stock.code]) continue // already loaded
       setKlineLoading(prev => ({ ...prev, [stock.code]: true }))
       try {
-        const [dayRes, weekRes, monthRes, yearRes] = await Promise.allSettled([
+        const [dayRes, weekRes, monthRes] = await Promise.allSettled([
           getDataKline({ code: stock.code, period: 'day', count: 120 }),
           getDataKline({ code: stock.code, period: 'week', count: 120 }),
           getDataKline({ code: stock.code, period: 'month', count: 120 }),
-          getDataKline({ code: stock.code, period: 'year', count: 60 }),
         ])
         setStockKlines(prev => ({
           ...prev,
@@ -522,7 +522,6 @@ export default function XiaofanSelectPage() {
             day: dayRes.status === 'fulfilled' && dayRes.value?.code === 0 ? (dayRes.value.data?.klines || dayRes.value.data || []) : [],
             week: weekRes.status === 'fulfilled' && weekRes.value?.code === 0 ? (weekRes.value.data?.klines || weekRes.value.data || []) : [],
             month: monthRes.status === 'fulfilled' && monthRes.value?.code === 0 ? (monthRes.value.data?.klines || monthRes.value.data || []) : [],
-            year: yearRes.status === 'fulfilled' && yearRes.value?.code === 0 ? (yearRes.value.data?.klines || yearRes.value.data || []) : [],
           }
         }))
       } catch (e) { console.error(`Fetch kline for ${stock.code} failed`, e) }
@@ -704,14 +703,25 @@ export default function XiaofanSelectPage() {
     } catch (e) { console.error(`Fetch minute for ${code} failed`, e) }
   }, [minuteData])
 
-  // Get period for stock
-  const getPeriod = (code) => stockPeriod[code] || 'day'
+  // Get period for stock (individual override or category-level default)
+  const getPeriod = (code) => stockPeriod[code] || categoryPeriod || 'day'
   const setPeriodForStock = (code, period) => {
     setStockPeriod(prev => ({ ...prev, [code]: period }))
     if (period === 'minute') fetchMinuteData(code)
   }
 
-  const periodLabels = { minute: '分时', day: '日K', week: '周K', month: '月K', year: '年K' }
+  // Set period for ALL stocks in current category
+  const setPeriodForAll = (period) => {
+    setCategoryPeriod(period)
+    const newPeriods = {}
+    activeStocks.forEach(s => { newPeriods[s.code] = period })
+    setStockPeriod(prev => ({ ...prev, ...newPeriods }))
+    if (period === 'minute') {
+      activeStocks.forEach(s => fetchMinuteData(s.code))
+    }
+  }
+
+  const periodLabels = { minute: '分时', day: '日K', week: '周K', month: '月K' }
 
   return (
     <div ref={fullscreenRef} className={`p-4 space-y-4 min-h-screen ${isFullscreen ? 'bg-[#0a0a0f]' : ''}`} 
@@ -864,7 +874,28 @@ export default function XiaofanSelectPage() {
           <p className={`text-sm ${isFullscreen ? 'text-gray-400' : 'text-gray-500'}`}>当前分类暂无股票，请添加</p>
         </div>
       ) : (
-        <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
+        <div className="space-y-3">
+          {/* Category-level period selector (syncs all stocks) */}
+          <div className={`flex items-center gap-3 px-3 py-2 rounded-xl ${isFullscreen ? 'bg-gray-900/60 border border-gray-800' : 'bg-white border border-gray-200 shadow-sm'}`}>
+            <span className={`text-xs font-medium ${isFullscreen ? 'text-gray-400' : 'text-gray-500'}`}>统一周期：</span>
+            <div className="flex gap-1">
+              {['minute', 'day', 'week', 'month'].map(p => (
+                <button key={p} onClick={() => setPeriodForAll(p)}
+                  className={`px-3 py-1 rounded-lg text-xs font-medium transition ${
+                    categoryPeriod === p
+                      ? 'bg-[#513CC8] text-white shadow-sm'
+                      : isFullscreen ? 'text-gray-500 hover:text-white hover:bg-gray-800' : 'text-gray-500 hover:text-gray-700 hover:bg-gray-100'
+                  }`}>
+                  {periodLabels[p]}
+                </button>
+              ))}
+            </div>
+            <span className={`text-[10px] ml-auto ${isFullscreen ? 'text-gray-600' : 'text-gray-400'}`}>
+              点击切换全部 {activeStocks.length} 只股票周期
+            </span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 2xl:grid-cols-4 gap-4">
           {activeStocks.map(stock => {
             const q = stockQuotes[stock.code] || {}
             const price = q.price || q.current_price || 0
@@ -932,7 +963,7 @@ export default function XiaofanSelectPage() {
 
                 {/* Period selector */}
                 <div className={`px-3 py-1.5 flex gap-0.5 ${isFullscreen ? 'bg-gray-900' : 'bg-gray-50'}`}>
-                  {['minute', 'day', 'week', 'month', 'year'].map(p => (
+                  {['minute', 'day', 'week', 'month'].map(p => (
                     <button key={p} onClick={() => setPeriodForStock(stock.code, p)}
                       className={`px-2 py-0.5 rounded text-[10px] font-medium transition ${
                         period === p
@@ -994,6 +1025,7 @@ export default function XiaofanSelectPage() {
               </div>
             )
           })}
+          </div>
         </div>
       )}
 
