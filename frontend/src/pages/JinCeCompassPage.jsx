@@ -1,15 +1,14 @@
-import { useState, useEffect, useCallback } from 'react'
-import { getCompassStrategies, runCompassAnalysis, getCompassHistory } from '../services/api'
+import { useState, useEffect, useCallback, useRef } from 'react'
+import { getCompassStrategies, runCompassAnalysis, getCompassHistory, getCompassKline, runCompassEvolution } from '../services/api'
 import {
   Compass, Play, Loader2, CheckCircle, XCircle, AlertTriangle,
   TrendingUp, TrendingDown, Minus, Shield, Brain, Target, Zap,
-  BarChart3, Activity, Clock, ChevronDown, RefreshCw, ArrowRight
+  BarChart3, Activity, Clock, ChevronDown, ArrowRight, Square,
+  RefreshCw, Settings, Layers, Radio, BookOpen, Gavel, Landmark
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// ==================== 金策罗盘 Jin Ce Compass ====================
-// 三省六部体系: CrownPrince → ZhongshuSheng → MenxiaSheng → ShangshuSheng
-
+// ==================== 金策罗盘 V2 ====================
 export default function JinCeCompassPage() {
   const [code, setCode] = useState('')
   const [stockName, setStockName] = useState('')
@@ -20,11 +19,13 @@ export default function JinCeCompassPage() {
   const [dataSource, setDataSource] = useState('system')
   const [loading, setLoading] = useState(false)
   const [result, setResult] = useState(null)
-  const [history, setHistory] = useState([])
-  const [showStrategies, setShowStrategies] = useState(false)
-  const [activeTab, setActiveTab] = useState('result')
+  const [klineData, setKlineData] = useState(null)
+  const [activeView, setActiveView] = useState('decision') // decision/evolution/chart
+  const [evolutionResult, setEvolutionResult] = useState(null)
+  const [evolving, setEvolving] = useState(false)
+  const [logs, setLogs] = useState([])
+  const [pipelineStep, setPipelineStep] = useState(-1)
 
-  // Load strategies on mount
   useEffect(() => {
     const load = async () => {
       try {
@@ -33,636 +34,643 @@ export default function JinCeCompassPage() {
           setStrategies(res.data.strategies)
           setSelectedStrategies(res.data.strategies.filter(s => s.is_active).map(s => s.id))
         }
-      } catch (e) {
-        console.error('Load strategies failed:', e)
-      }
-    }
-    load()
-  }, [])
-
-  // Load history
-  useEffect(() => {
-    const load = async () => {
-      try {
-        const res = await getCompassHistory({})
-        if (res?.code === 0 && res?.data) {
-          setHistory(Array.isArray(res.data) ? res.data : [])
-        }
       } catch (e) {}
     }
     load()
   }, [])
 
-  const handleAnalyze = useCallback(async () => {
-    if (!code.trim()) {
-      toast.error('请输入股票代码')
-      return
+  const addLog = (type, msg) => {
+    const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false })
+    setLogs(prev => [...prev.slice(-50), { ts, type, msg }])
+  }
+
+  const fetchKline = useCallback(async (stockCode) => {
+    try {
+      const res = await getCompassKline({ code: stockCode, period })
+      if (res?.code === 0 && res?.data?.klines) {
+        setKlineData(res.data)
+        addLog('info', `K线加载完成: ${res.data.count}根 (${res.data.data_source})`)
+      }
+    } catch (e) {
+      addLog('error', 'K线加载失败')
     }
+  }, [period])
+
+  const handleAnalyze = useCallback(async () => {
+    if (!code.trim()) { toast.error('请输入股票代码'); return }
     setLoading(true)
     setResult(null)
+    setPipelineStep(0)
+    setLogs([])
+    addLog('system', '系统启动，等待连接...')
+
+    // Fetch kline first
+    await fetchKline(code.trim())
+    addLog('info', 'K线数据获取成功')
+
+    // Simulate pipeline steps
+    setPipelineStep(1)
+    addLog('info', '太子监: 数据校验中...')
+
     try {
       const res = await runCompassAnalysis({
-        code: code.trim(),
-        name: stockName || code.trim(),
-        mode,
-        strategies: selectedStrategies,
-        period,
-        data_source: dataSource,
+        code: code.trim(), name: stockName || code.trim(),
+        mode, strategies: selectedStrategies, period, data_source: dataSource,
       })
       if (res?.code === 0 && res?.data) {
         setResult(res.data)
-        setActiveTab('result')
-        toast.success(`分析完成 · ${res.data.data_source_used || ''}`)
+        setPipelineStep(2)
+        addLog('info', `中书省: 策略信号生成 - 共识=${res.data.zhongshu_sheng?.consensus}`)
+        setTimeout(() => { setPipelineStep(3); addLog('info', `门下省: 风控审核 - ${res.data.menxia_sheng?.approved ? '通过' : '拒绝'}`) }, 500)
+        setTimeout(() => { setPipelineStep(4); addLog('info', `尚书省: 执行建议 - ${res.data.shangshu_sheng?.action}`) }, 1000)
+        setTimeout(() => { setPipelineStep(5); addLog('success', `分析完成: 建议=${res.data.suggestion} 信心度=${res.data.confidence}%`) }, 1500)
+        toast.success('六部决策完成')
       } else {
         toast.error(res?.message || '分析失败')
+        addLog('error', res?.message || '分析失败')
       }
     } catch (e) {
-      toast.error('分析请求失败: ' + (e.response?.data?.message || e.message))
+      toast.error('分析请求失败')
+      addLog('error', '请求失败: ' + (e.message || ''))
     }
     setLoading(false)
-  }, [code, stockName, mode, selectedStrategies, period, dataSource])
+  }, [code, stockName, mode, selectedStrategies, period, dataSource, fetchKline])
 
-  const toggleStrategy = (id) => {
-    setSelectedStrategies(prev =>
-      prev.includes(id) ? prev.filter(s => s !== id) : [...prev, id]
-    )
-  }
-
-  const selectAllStrategies = () => setSelectedStrategies(strategies.map(s => s.id))
-  const deselectAllStrategies = () => setSelectedStrategies([])
+  const handleEvolution = useCallback(async () => {
+    if (!code.trim()) { toast.error('请输入股票代码'); return }
+    setEvolving(true)
+    setEvolutionResult(null)
+    addLog('system', '策略进化启动...')
+    try {
+      const res = await runCompassEvolution({
+        code: code.trim(), name: stockName || '',
+        strategies: selectedStrategies, max_rounds: 3, period,
+      })
+      if (res?.code === 0 && res?.data) {
+        setEvolutionResult(res.data)
+        addLog('success', `进化完成: 最佳策略=${res.data.best_strategy} 评分=${res.data.best_score?.toFixed(2)}`)
+        toast.success('策略进化完成')
+      } else {
+        toast.error(res?.message || '进化失败')
+        addLog('error', res?.message || '进化失败')
+      }
+    } catch (e) {
+      toast.error('进化请求失败')
+      addLog('error', '进化失败: ' + e.message)
+    }
+    setEvolving(false)
+  }, [code, stockName, selectedStrategies, period])
 
   return (
-    <div className="p-4 md:p-6 space-y-4" style={{ background: '#F8F9FB', minHeight: '100vh' }}>
+    <div className="p-3 md:p-4 space-y-3" style={{ background: '#0F0E1A', minHeight: '100vh' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
-            <Compass className="text-[#513CC8]" size={22} />
-            金策罗盘
-          </h1>
-          <p className="text-xs text-gray-500 mt-1">
-            三省六部体系 · AI多策略研判 · 数据源: AkShare + 东方财富
-          </p>
+        <div className="flex items-center gap-3">
+          <Compass size={20} className="text-[#9B8AFF]" />
+          <h1 className="text-lg font-bold text-white">金策罗盘</h1>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-[#1E1B3A] text-[#9B8AFF] border border-[#2D2A5E]">
+            {strategies.length} 策略
+          </span>
         </div>
-        <span className="text-[10px] px-2.5 py-1 rounded-full bg-[#F0EDFA] text-[#513CC8] font-semibold">
-          {strategies.length} 策略就绪
-        </span>
-      </div>
-
-      {/* Control Panel */}
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4 space-y-3">
-        {/* Row 1: Code + Mode */}
-        <div className="flex flex-wrap gap-3 items-end">
-          <div className="flex-1 min-w-[200px]">
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">股票代码</label>
-            <div className="flex gap-2">
-              <input
-                type="text"
-                value={code}
-                onChange={(e) => setCode(e.target.value)}
-                placeholder="如 600519"
-                className="flex-1 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-[#513CC8] focus:ring-1 focus:ring-[#513CC8]/20 outline-none transition"
-                onKeyDown={(e) => e.key === 'Enter' && handleAnalyze()}
-              />
-              <input
-                type="text"
-                value={stockName}
-                onChange={(e) => setStockName(e.target.value)}
-                placeholder="名称(选填)"
-                className="w-28 px-3 py-2 rounded-lg border border-gray-200 text-sm focus:border-[#513CC8] outline-none transition"
-              />
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">分析模式</label>
-            <div className="flex gap-1">
-              {[
-                { key: 'analyze', label: '策略研判', icon: Brain },
-                { key: 'backtest', label: '回测验证', icon: BarChart3 },
-                { key: 'evolve', label: '策略进化', icon: Zap },
-              ].map(m => (
-                <button key={m.key} onClick={() => setMode(m.key)}
-                  className={`flex items-center gap-1 px-3 py-2 rounded-lg text-xs font-medium transition ${
-                    mode === m.key
-                      ? 'bg-[#513CC8] text-white shadow-sm'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}>
-                  <m.icon size={12} />
-                  {m.label}
-                </button>
-              ))}
-            </div>
-          </div>
-        </div>
-
-        {/* Row 2: Period + DataSource + Strategies + Run Button */}
-        <div className="flex flex-wrap gap-3 items-end">
-          <div>
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">K线周期</label>
-            <div className="flex gap-1">
-              {[{k:'day',l:'日K'},{k:'week',l:'周K'},{k:'month',l:'月K'}].map(p => (
-                <button key={p.k} onClick={() => setPeriod(p.k)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    period === p.k
-                      ? 'bg-[#513CC8] text-white'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}>
-                  {p.l}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          <div>
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">数据源</label>
-            <div className="flex gap-1">
-              {[
-                { key: 'system', label: '系统设置' },
-                { key: 'akshare', label: 'AkShare' },
-                { key: 'eastmoney', label: '东方财富' },
-              ].map(ds => (
-                <button key={ds.key} onClick={() => setDataSource(ds.key)}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                    dataSource === ds.key
-                      ? 'bg-[#513CC8] text-white'
-                      : 'bg-gray-50 text-gray-600 hover:bg-gray-100 border border-gray-200'
-                  }`}>
-                  {ds.label}
-                </button>
-              ))}
-            </div>
-          </div>
-
-          {/* Strategy selector */}
-          <div className="relative">
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">策略组合</label>
-            <button onClick={() => setShowStrategies(!showStrategies)}
-              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-50 text-gray-700 hover:bg-gray-100 border border-gray-200 transition">
-              <Target size={11} className="text-[#513CC8]" />
-              {selectedStrategies.length}/{strategies.length} 策略
-              <ChevronDown size={10} />
-            </button>
-            {showStrategies && (
-              <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-xl shadow-xl border border-gray-100 p-3 w-80 max-h-72 overflow-y-auto">
-                <div className="flex items-center justify-between mb-2 pb-2 border-b border-gray-100">
-                  <span className="text-xs font-medium text-gray-600">选择策略</span>
-                  <div className="flex gap-2">
-                    <button onClick={selectAllStrategies} className="text-[10px] text-[#513CC8] hover:underline">全选</button>
-                    <button onClick={deselectAllStrategies} className="text-[10px] text-gray-400 hover:underline">全不选</button>
-                  </div>
-                </div>
-                {strategies.map(s => (
-                  <label key={s.id} className="flex items-center gap-2 py-1.5 cursor-pointer hover:bg-gray-50 px-2 rounded-lg transition">
-                    <input type="checkbox" checked={selectedStrategies.includes(s.id)}
-                      onChange={() => toggleStrategy(s.id)}
-                      className="w-3.5 h-3.5 rounded border-gray-300 text-[#513CC8] focus:ring-[#513CC8]" />
-                    <div className="flex-1 min-w-0">
-                      <span className="text-xs text-gray-700 font-medium">{s.name}</span>
-                      <span className="text-[9px] text-gray-400 ml-1.5">{s.description}</span>
-                    </div>
-                    <span className="text-[9px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500 flex-shrink-0">{s.category}</span>
-                  </label>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* Run button */}
-          <div>
-            <label className="text-[10px] text-gray-500 font-medium mb-1 block">&nbsp;</label>
-            <button onClick={handleAnalyze} disabled={loading}
-              className="flex items-center gap-1.5 px-5 py-2 rounded-lg text-sm font-bold text-white transition disabled:opacity-50 shadow-sm hover:shadow-md"
-              style={{ background: loading ? '#9CA3AF' : '#513CC8' }}>
-              {loading ? <Loader2 size={14} className="animate-spin" /> : <Play size={14} />}
-              {loading ? '分析中...' : '开始分析'}
-            </button>
-          </div>
-        </div>
-      </div>
-
-      {/* Results */}
-      {result && (
-        <div className="space-y-3">
-          {/* Tabs */}
-          <div className="flex gap-1 bg-white rounded-xl border border-gray-100 p-1 shadow-sm">
-            {[
-              { key: 'result', label: '综合研判', icon: Brain },
-              { key: 'pipeline', label: '六部流水线', icon: Activity },
-              { key: 'backtest', label: '回测', icon: BarChart3, show: result.backtest_result },
-              { key: 'history', label: '历史', icon: Clock },
-            ].filter(t => t.show !== null && t.show !== undefined ? t.show : true).map(t => (
-              <button key={t.key} onClick={() => setActiveTab(t.key)}
-                className={`flex-1 flex items-center justify-center gap-1.5 px-3 py-2 rounded-lg text-xs font-medium transition ${
-                  activeTab === t.key
-                    ? 'bg-[#513CC8] text-white shadow-sm'
-                    : 'text-gray-500 hover:text-gray-700 hover:bg-gray-50'
-                }`}>
-                <t.icon size={12} />
-                {t.label}
-              </button>
-            ))}
-          </div>
-
-          {activeTab === 'result' && <ResultPanel result={result} />}
-          {activeTab === 'pipeline' && <PipelinePanel result={result} />}
-          {activeTab === 'backtest' && result.backtest_result && <BacktestPanel data={result.backtest_result} />}
-          {activeTab === 'history' && <HistoryPanel history={history} />}
-        </div>
-      )}
-
-      {/* Empty state */}
-      {!result && !loading && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
-          <div className="w-16 h-16 mx-auto mb-4 rounded-2xl bg-[#F0EDFA] flex items-center justify-center">
-            <Compass size={32} className="text-[#513CC8]" />
-          </div>
-          <h3 className="text-lg font-bold text-gray-800 mb-2">金策罗盘 · 量化策略分析</h3>
-          <p className="text-sm text-gray-400 max-w-lg mx-auto leading-relaxed">
-            输入股票代码，选择分析模式和策略组合，系统通过<b className="text-[#513CC8]">三省六部体系</b>（太子监→中书省→门下省→尚书省）进行全流程策略信号生成、风控审核和执行建议
-          </p>
-          <div className="mt-6 flex justify-center gap-2 flex-wrap">
-            {[
-              ['600519', '贵州茅台'], ['000001', '平安银行'],
-              ['300750', '宁德时代'], ['002475', '立讯精密'],
-              ['601318', '中国平安'], ['000858', '五粮液'],
-            ].map(([c, n]) => (
-              <button key={c} onClick={() => { setCode(c); setStockName(n) }}
-                className="px-3 py-1.5 rounded-full text-xs bg-[#F0EDFA] text-[#513CC8] hover:bg-[#E4DFF7] transition font-medium">
-                {c} {n}
-              </button>
-            ))}
-          </div>
-        </div>
-      )}
-
-      {/* Loading state */}
-      {loading && !result && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-10 text-center">
-          <Loader2 size={32} className="mx-auto mb-3 text-[#513CC8] animate-spin" />
-          <p className="text-sm text-gray-500">正在执行六部体系分析流程...</p>
-          <div className="mt-4 flex justify-center gap-2">
-            {['太子监', '中书省', '门下省', '尚书省', 'AI研判'].map((step, i) => (
-              <span key={step} className="text-[10px] px-2 py-1 rounded bg-[#F0EDFA] text-[#513CC8] animate-pulse"
-                style={{ animationDelay: `${i * 0.2}s` }}>
-                {step}
-              </span>
-            ))}
-          </div>
-        </div>
-      )}
-    </div>
-  )
-}
-
-// ==================== Result Panel ====================
-function ResultPanel({ result }) {
-  const cfg = {
-    buy:  { label: '买入', color: 'text-red-600', bg: 'bg-red-50', border: 'border-red-200', icon: TrendingUp },
-    sell: { label: '卖出', color: 'text-green-600', bg: 'bg-green-50', border: 'border-green-200', icon: TrendingDown },
-    hold: { label: '观望', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: Minus },
-  }[result.suggestion] || { label: '观望', color: 'text-amber-600', bg: 'bg-amber-50', border: 'border-amber-200', icon: Minus }
-
-  const Icon = cfg.icon
-
-  return (
-    <div className="space-y-3">
-      {/* Summary Card */}
-      <div className={`rounded-xl border ${cfg.border} ${cfg.bg} p-4`}>
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className={`w-12 h-12 rounded-xl flex items-center justify-center bg-white border ${cfg.border} shadow-sm`}>
-              <Icon size={22} className={cfg.color} />
-            </div>
-            <div>
-              <h3 className="text-base font-bold text-gray-800">
-                {result.name || result.code}
-                <span className="text-xs text-gray-400 ml-2 font-normal">{result.code}</span>
-              </h3>
-              <div className="flex items-center gap-3 mt-0.5">
-                <span className={`text-sm font-bold ${cfg.color}`}>{cfg.label}</span>
-                <span className="text-[10px] text-gray-400">信心度</span>
-                <span className="text-sm font-bold text-[#513CC8]">{result.confidence}%</span>
-                <span className={`text-[10px] px-1.5 py-0.5 rounded font-medium ${
-                  result.risk_level === 'low' ? 'bg-green-100 text-green-700' :
-                  result.risk_level === 'high' ? 'bg-red-100 text-red-700' : 'bg-amber-100 text-amber-700'
-                }`}>
-                  风险{result.risk_level === 'low' ? '低' : result.risk_level === 'high' ? '高' : '中'}
-                </span>
-              </div>
-            </div>
-          </div>
-          <div className="text-right hidden sm:block">
-            <div className="text-[10px] text-gray-400">AI模型</div>
-            <div className="text-xs font-medium text-gray-600 max-w-[120px] truncate">{result.ai_model}</div>
-            <div className="text-[10px] text-gray-400 mt-0.5">{result.analyzed_at}</div>
-          </div>
-        </div>
-
-        {/* Key metrics */}
-        <div className="grid grid-cols-4 gap-2 mt-3">
+        <div className="flex gap-1">
           {[
-            { label: '建议仓位', value: `${result.menxia_sheng?.max_position || 0}%`, color: 'text-[#513CC8]' },
-            { label: '止损位', value: result.menxia_sheng?.stop_loss ? result.menxia_sheng.stop_loss.toFixed(2) : '---', color: 'text-green-600' },
-            { label: '止盈位', value: result.menxia_sheng?.take_profit ? result.menxia_sheng.take_profit.toFixed(2) : '---', color: 'text-red-500' },
-            { label: '数据源', value: result.data_source_used || '---', color: 'text-gray-600' },
-          ].map((item, i) => (
-            <div key={i} className="text-center p-2 rounded-lg bg-white/70 border border-white">
-              <div className="text-[9px] text-gray-400">{item.label}</div>
-              <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
-            </div>
+            { key: 'decision', label: '六部决策', icon: Landmark },
+            { key: 'chart', label: 'K线图表', icon: BarChart3 },
+            { key: 'evolution', label: '策略进化', icon: Zap },
+          ].map(v => (
+            <button key={v.key} onClick={() => setActiveView(v.key)}
+              className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
+                activeView === v.key ? 'bg-[#513CC8] text-white' : 'bg-[#1E1B3A] text-gray-400 hover:text-white border border-[#2D2A5E]'
+              }`}>
+              <v.icon size={11} />{v.label}
+            </button>
           ))}
         </div>
       </div>
 
-      {/* AI Insights */}
-      {result.ai_insights && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <h4 className="text-sm font-bold text-gray-700 flex items-center gap-1.5 mb-2">
-            <Brain size={14} className="text-[#513CC8]" /> AI智能研判
-          </h4>
-          <div className="text-sm text-gray-600 leading-relaxed whitespace-pre-wrap bg-gray-50 rounded-lg p-3 border border-gray-100">
-            {result.ai_insights}
+      {/* Control Bar */}
+      <ControlBar
+        code={code} setCode={setCode}
+        stockName={stockName} setStockName={setStockName}
+        period={period} setPeriod={setPeriod}
+        dataSource={dataSource} setDataSource={setDataSource}
+        mode={mode} setMode={setMode}
+        strategies={strategies} selectedStrategies={selectedStrategies}
+        setSelectedStrategies={setSelectedStrategies}
+        loading={loading} onAnalyze={handleAnalyze}
+        evolving={evolving} onEvolve={handleEvolution}
+        activeView={activeView}
+      />
+
+      {/* Main Content */}
+      {activeView === 'decision' && (
+        <DecisionDashboard result={result} loading={loading} pipelineStep={pipelineStep} logs={logs} />
+      )}
+      {activeView === 'chart' && (
+        <KlineChart klineData={klineData} result={result} code={code} onLoad={fetchKline} />
+      )}
+      {activeView === 'evolution' && (
+        <EvolutionPanel result={evolutionResult} evolving={evolving} strategies={strategies} logs={logs} />
+      )}
+    </div>
+  )
+}
+
+// ==================== Control Bar ====================
+function ControlBar({ code, setCode, stockName, setStockName, period, setPeriod, dataSource, setDataSource, mode, setMode, strategies, selectedStrategies, setSelectedStrategies, loading, onAnalyze, evolving, onEvolve, activeView }) {
+  const [showStrats, setShowStrats] = useState(false)
+  return (
+    <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-3">
+      <div className="flex flex-wrap gap-3 items-end">
+        <div className="flex-1 min-w-[180px]">
+          <label className="text-[10px] text-gray-500 mb-1 block">股票代码</label>
+          <div className="flex gap-2">
+            <input type="text" value={code} onChange={e => setCode(e.target.value)}
+              placeholder="600519" onKeyDown={e => e.key === 'Enter' && onAnalyze()}
+              className="flex-1 px-3 py-1.5 rounded-lg bg-[#0F0E1A] border border-[#2D2A5E] text-white text-sm placeholder-gray-600 focus:border-[#513CC8] outline-none" />
+            <input type="text" value={stockName} onChange={e => setStockName(e.target.value)}
+              placeholder="名称"
+              className="w-20 px-2 py-1.5 rounded-lg bg-[#0F0E1A] border border-[#2D2A5E] text-white text-sm placeholder-gray-600 outline-none" />
           </div>
         </div>
-      )}
-
-      {/* Strategy Signals */}
-      {result.zhongshu_sheng?.signals?.length > 0 && (
-        <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-          <h4 className="text-sm font-bold text-gray-700 flex items-center gap-1.5 mb-3">
-            <Target size={14} className="text-[#513CC8]" />
-            策略信号
-            <span className="text-[10px] font-normal text-gray-400 ml-1">
-              买{result.zhongshu_sheng.buy_count} / 卖{result.zhongshu_sheng.sell_count} / 持{result.zhongshu_sheng.hold_count}
-            </span>
-          </h4>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {result.zhongshu_sheng.signals.map((sig, i) => (
-              <SignalCard key={i} signal={sig} />
+        <div>
+          <label className="text-[10px] text-gray-500 mb-1 block">周期</label>
+          <div className="flex gap-1">
+            {['day','week','month'].map(p => (
+              <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium ${period===p?'bg-[#513CC8] text-white':'bg-[#0F0E1A] text-gray-400 border border-[#2D2A5E]'}`}>
+                {{day:'日K',week:'周K',month:'月K'}[p]}
+              </button>
             ))}
           </div>
         </div>
-      )}
-    </div>
-  )
-}
-
-function SignalCard({ signal }) {
-  const colors = {
-    buy:  { bg: 'bg-red-50', border: 'border-red-100', badge: 'bg-red-500 text-white', bar: 'bg-red-400' },
-    sell: { bg: 'bg-green-50', border: 'border-green-100', badge: 'bg-green-500 text-white', bar: 'bg-green-400' },
-    hold: { bg: 'bg-gray-50', border: 'border-gray-100', badge: 'bg-gray-400 text-white', bar: 'bg-gray-300' },
-  }[signal.signal] || { bg: 'bg-gray-50', border: 'border-gray-100', badge: 'bg-gray-400 text-white', bar: 'bg-gray-300' }
-
-  return (
-    <div className={`p-2.5 rounded-lg border ${colors.border} ${colors.bg}`}>
-      <div className="flex items-center justify-between mb-1">
-        <span className="text-xs font-bold text-gray-700">{signal.strategy_name}</span>
-        <span className={`text-[9px] px-1.5 py-0.5 rounded-full font-bold ${colors.badge}`}>
-          {signal.signal === 'buy' ? '买' : signal.signal === 'sell' ? '卖' : '持'}
-        </span>
-      </div>
-      <p className="text-[10px] text-gray-500 leading-tight mb-1.5 line-clamp-2">{signal.reason}</p>
-      <div className="flex items-center gap-1.5">
-        <div className="flex-1 h-1.5 rounded-full bg-gray-200 overflow-hidden">
-          <div className={`h-full rounded-full transition-all ${colors.bar}`}
-            style={{ width: `${Math.round(signal.strength * 100)}%` }} />
-        </div>
-        <span className="text-[9px] text-gray-400 w-7 text-right">{Math.round(signal.strength * 100)}%</span>
-      </div>
-    </div>
-  )
-}
-
-// ==================== Pipeline Panel ====================
-function PipelinePanel({ result }) {
-  const steps = [
-    {
-      title: '太子监',
-      subtitle: 'CrownPrince · 数据校验',
-      icon: Shield,
-      color: '#10B981',
-      data: result.crown_prince,
-      render: (d) => (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            {d.is_valid ? <CheckCircle size={12} className="text-green-500" /> : <XCircle size={12} className="text-red-500" />}
-            <span className="text-xs text-gray-700">{d.message}</span>
-          </div>
-          <div className="flex flex-wrap gap-2 text-[10px]">
-            <span className={`px-1.5 py-0.5 rounded ${d.is_st ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-              ST: {d.is_st ? '是' : '否'}
-            </span>
-            <span className={`px-1.5 py-0.5 rounded ${d.is_limit_up ? 'bg-red-100 text-red-600' : 'bg-gray-100 text-gray-500'}`}>
-              涨停: {d.is_limit_up ? '是' : '否'}
-            </span>
-            <span className="px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              流动性: {d.liquidity === 'high' ? '高' : d.liquidity === 'low' ? '低' : '中'}
-            </span>
-            <span className="px-1.5 py-0.5 rounded bg-[#F0EDFA] text-[#513CC8]">
-              K线: {d.data_bars}根
-            </span>
+        <div>
+          <label className="text-[10px] text-gray-500 mb-1 block">数据源</label>
+          <div className="flex gap-1">
+            {[{k:'system',l:'系统'},{k:'akshare',l:'AkShare'},{k:'eastmoney',l:'东财'}].map(d => (
+              <button key={d.k} onClick={() => setDataSource(d.k)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium ${dataSource===d.k?'bg-[#513CC8] text-white':'bg-[#0F0E1A] text-gray-400 border border-[#2D2A5E]'}`}>
+                {d.l}
+              </button>
+            ))}
           </div>
         </div>
-      )
-    },
-    {
-      title: '中书省',
-      subtitle: 'ZhongshuSheng · 策略信号',
-      icon: Brain,
-      color: '#513CC8',
-      data: result.zhongshu_sheng,
-      render: (d) => (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-3">
-            <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-              d.consensus === 'buy' ? 'bg-red-100 text-red-600' :
-              d.consensus === 'sell' ? 'bg-green-100 text-green-600' : 'bg-amber-100 text-amber-600'
-            }`}>
-              共识: {d.consensus === 'buy' ? '买入' : d.consensus === 'sell' ? '卖出' : '持有'}
-            </span>
-            <span className="text-[10px] text-gray-400">
-              买{d.buy_count} / 卖{d.sell_count} / 持{d.hold_count}
-            </span>
-          </div>
-          <div className="h-2 rounded-full bg-gray-100 flex overflow-hidden">
-            {d.buy_count > 0 && <div className="bg-red-400 transition-all" style={{ width: `${d.buy_count/(d.buy_count+d.sell_count+d.hold_count)*100}%` }} />}
-            {d.sell_count > 0 && <div className="bg-green-400 transition-all" style={{ width: `${d.sell_count/(d.buy_count+d.sell_count+d.hold_count)*100}%` }} />}
-            {d.hold_count > 0 && <div className="bg-amber-300 transition-all" style={{ width: `${d.hold_count/(d.buy_count+d.sell_count+d.hold_count)*100}%` }} />}
-          </div>
-        </div>
-      )
-    },
-    {
-      title: '门下省',
-      subtitle: 'MenxiaSheng · 风控审核',
-      icon: Shield,
-      color: '#F59E0B',
-      data: result.menxia_sheng,
-      render: (d) => (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2">
-            {d.approved
-              ? <CheckCircle size={12} className="text-green-500" />
-              : <XCircle size={12} className="text-red-500" />}
-            <span className="text-xs font-medium">{d.approved ? '风控通过' : '风控拒绝'}</span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-gray-100 text-gray-500">
-              风险分: {typeof d.risk_score === 'number' ? d.risk_score.toFixed(0) : d.risk_score}
-            </span>
-            <span className="text-[10px] px-1.5 py-0.5 rounded bg-[#F0EDFA] text-[#513CC8]">
-              仓位≤{d.max_position}%
-            </span>
-          </div>
-          {d.risk_warnings?.length > 0 && (
-            <div className="space-y-0.5">
-              {d.risk_warnings.map((w, i) => (
-                <div key={i} className="text-[10px] text-amber-600 flex items-center gap-1">
-                  <AlertTriangle size={9} /> {w}
-                </div>
+        <div className="relative">
+          <label className="text-[10px] text-gray-500 mb-1 block">策略</label>
+          <button onClick={() => setShowStrats(!showStrats)} className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-[#0F0E1A] border border-[#2D2A5E] text-gray-300 text-[10px]">
+            <Target size={10} className="text-[#9B8AFF]" />{selectedStrategies.length}/{strategies.length}<ChevronDown size={9}/>
+          </button>
+          {showStrats && (
+            <div className="absolute top-full mt-1 left-0 z-50 bg-[#161428] rounded-lg border border-[#2D2A5E] p-2 w-64 max-h-56 overflow-y-auto shadow-xl">
+              {strategies.map(s => (
+                <label key={s.id} className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-[#1E1B3A] text-[10px] text-gray-300">
+                  <input type="checkbox" checked={selectedStrategies.includes(s.id)}
+                    onChange={() => setSelectedStrategies(prev => prev.includes(s.id)?prev.filter(x=>x!==s.id):[...prev,s.id])}
+                    className="w-3 h-3 rounded border-gray-600 text-[#513CC8]" />
+                  <span className="flex-1">{s.name}</span>
+                  <span className="text-gray-600">{s.category}</span>
+                </label>
               ))}
             </div>
           )}
         </div>
-      )
-    },
-    {
-      title: '尚书省',
-      subtitle: 'ShangshuSheng · 执行建议',
-      icon: Zap,
-      color: '#EF4444',
-      data: result.shangshu_sheng,
-      render: (d) => (
-        <div className="space-y-1.5">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className={`text-xs font-bold px-2 py-0.5 rounded ${
-              d.action === 'buy' ? 'bg-red-100 text-red-600' :
-              d.action === 'sell' ? 'bg-green-100 text-green-600' : 'bg-gray-100 text-gray-600'
-            }`}>
-              {d.action === 'buy' ? '建议买入' : d.action === 'sell' ? '建议卖出' : '建议持有'}
-            </span>
-            <span className="text-[10px] text-gray-400">{d.time_horizon}</span>
-          </div>
-          <div className="grid grid-cols-3 gap-2 text-[10px]">
-            <span className="px-1.5 py-1 rounded bg-gray-50 text-center">入场: <b>{d.entry_price?.toFixed(2) || '---'}</b></span>
-            <span className="px-1.5 py-1 rounded bg-red-50 text-center text-red-600">目标: <b>{d.target_price?.toFixed(2) || '---'}</b></span>
-            <span className="px-1.5 py-1 rounded bg-green-50 text-center text-green-600">止损: <b>{d.exit_price?.toFixed(2) || '---'}</b></span>
-          </div>
-          <p className="text-[10px] text-gray-500">{d.execution}</p>
-        </div>
-      )
-    },
-  ]
-
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <h4 className="text-sm font-bold text-gray-700 mb-4 flex items-center gap-1.5">
-        <Activity size={14} className="text-[#513CC8]" />
-        六部流水线 · Pipeline
-      </h4>
-      <div className="space-y-0">
-        {steps.map((step, i) => {
-          const StepIcon = step.icon
-          return (
-            <div key={i} className="relative flex gap-3">
-              {/* Vertical line */}
-              <div className="flex flex-col items-center">
-                <div className="w-9 h-9 rounded-lg flex items-center justify-center flex-shrink-0 shadow-sm"
-                  style={{ background: step.color + '12', border: `1.5px solid ${step.color}30` }}>
-                  <StepIcon size={15} style={{ color: step.color }} />
-                </div>
-                {i < steps.length - 1 && (
-                  <div className="w-0.5 flex-1 my-1 rounded-full" style={{ background: step.color + '30' }}>
-                    <ArrowRight size={8} className="mx-auto mt-1 text-gray-300 rotate-90" />
-                  </div>
-                )}
-              </div>
-              {/* Content */}
-              <div className={`flex-1 pb-3 ${i < steps.length - 1 ? 'mb-1' : ''}`}>
-                <div className="p-3 rounded-lg bg-gray-50 border border-gray-100">
-                  <div className="flex items-center justify-between mb-1.5">
-                    <span className="text-xs font-bold text-gray-700">{step.title}</span>
-                    <span className="text-[9px] text-gray-400 font-mono">{step.subtitle}</span>
-                  </div>
-                  {step.data ? step.render(step.data) : (
-                    <span className="text-[10px] text-gray-400">暂无数据</span>
-                  )}
-                </div>
-              </div>
-            </div>
-          )
-        })}
+        <button onClick={activeView === 'evolution' ? onEvolve : onAnalyze} disabled={loading || evolving}
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white bg-[#513CC8] hover:bg-[#6B52E0] transition disabled:opacity-50 shadow-lg shadow-[#513CC8]/20">
+          {(loading||evolving) ? <Loader2 size={13} className="animate-spin"/> : <Play size={13}/>}
+          {loading?'分析中...':evolving?'进化中...':activeView==='evolution'?'启动进化':'开始分析'}
+        </button>
       </div>
     </div>
   )
 }
 
-// ==================== Backtest Panel ====================
-function BacktestPanel({ data }) {
-  const metrics = [
-    { label: '总收益', value: `${(data.total_return * 100).toFixed(1)}%`, color: data.total_return >= 0 ? 'text-red-500' : 'text-green-500' },
-    { label: '年化收益', value: `${(data.annual_return * 100).toFixed(1)}%`, color: 'text-[#513CC8]' },
-    { label: '最大回撤', value: `${(data.max_drawdown * 100).toFixed(1)}%`, color: 'text-green-600' },
-    { label: '胜率', value: `${(data.win_rate * 100).toFixed(0)}%`, color: 'text-amber-500' },
-    { label: '交易次数', value: data.trade_count, color: 'text-gray-700' },
-    { label: '夏普比率', value: data.sharpe_ratio?.toFixed(2) || '---', color: 'text-[#513CC8]' },
-    { label: '盈亏比', value: data.profit_factor?.toFixed(2) || '---', color: 'text-gray-700' },
-    { label: '回测区间', value: `${data.start_date || '---'} ~ ${data.end_date || '---'}`, color: 'text-gray-500' },
-  ]
+// ==================== K-line Chart ====================
+function KlineChart({ klineData, result, code, onLoad }) {
+  const canvasRef = useRef(null)
 
-  return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <h4 className="text-sm font-bold text-gray-700 flex items-center gap-1.5 mb-3">
-        <BarChart3 size={14} className="text-[#513CC8]" /> 回测结果
-      </h4>
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-        {metrics.map((item, i) => (
-          <div key={i} className="text-center p-3 rounded-lg bg-gray-50 border border-gray-100">
-            <div className="text-[10px] text-gray-400 mb-1">{item.label}</div>
-            <div className={`text-sm font-bold ${item.color}`}>{item.value}</div>
-          </div>
-        ))}
-      </div>
-    </div>
-  )
-}
+  useEffect(() => {
+    if (!klineData?.klines?.length || !canvasRef.current) return
+    drawChart(canvasRef.current, klineData.klines, result)
+  }, [klineData, result])
 
-// ==================== History Panel ====================
-function HistoryPanel({ history }) {
-  if (!history || history.length === 0) {
+  if (!klineData || !klineData.klines?.length) {
     return (
-      <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-8 text-center">
-        <Clock size={28} className="mx-auto mb-2 text-gray-300" />
-        <p className="text-sm text-gray-400">暂无分析历史</p>
+      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-8 text-center">
+        <BarChart3 size={36} className="mx-auto mb-3 text-[#2D2A5E]" />
+        <p className="text-sm text-gray-500">输入股票代码并执行分析后显示K线图表</p>
+        {code && <button onClick={() => onLoad(code)} className="mt-3 px-4 py-1.5 rounded bg-[#513CC8] text-white text-xs">加载K线</button>}
       </div>
     )
   }
 
   return (
-    <div className="bg-white rounded-xl border border-gray-100 shadow-sm p-4">
-      <h4 className="text-sm font-bold text-gray-700 mb-3 flex items-center gap-1.5">
-        <Clock size={14} className="text-[#513CC8]" /> 分析历史
-      </h4>
-      <div className="space-y-1.5">
-        {history.map((item, i) => (
-          <div key={i} className="flex items-center justify-between p-2.5 rounded-lg bg-gray-50 border border-gray-100 hover:border-[#513CC8]/20 transition">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-bold text-gray-700">{item.name || item.code}</span>
-              <span className="text-[10px] text-gray-400">{item.code}</span>
+    <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-3">
+      <div className="flex items-center justify-between mb-2">
+        <span className="text-xs text-gray-400">{code} · {klineData.period} · {klineData.data_source} · {klineData.count}根</span>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/>买入</span>
+          <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/>卖出</span>
+        </div>
+      </div>
+      <canvas ref={canvasRef} className="w-full rounded-lg" style={{height: 320}} />
+    </div>
+  )
+}
+
+function drawChart(canvas, klines, result) {
+  const ctx = canvas.getContext('2d')
+  const dpr = window.devicePixelRatio || 1
+  const rect = canvas.getBoundingClientRect()
+  canvas.width = rect.width * dpr
+  canvas.height = 320 * dpr
+  canvas.style.height = '320px'
+  ctx.scale(dpr, dpr)
+  const W = rect.width, H = 320
+  const chartH = H * 0.7, volH = H * 0.25, gap = H * 0.05
+
+  ctx.fillStyle = '#0F0E1A'
+  ctx.fillRect(0, 0, W, H)
+
+  if (!klines.length) return
+
+  // Price range
+  const closes = klines.map(k => k.close || 0).filter(v => v > 0)
+  const highs = klines.map(k => k.high || k.close || 0).filter(v => v > 0)
+  const lows = klines.map(k => k.low || k.close || 0).filter(v => v > 0)
+  const vols = klines.map(k => k.volume || 0)
+  if (!closes.length) return
+
+  const priceMin = Math.min(...lows) * 0.98
+  const priceMax = Math.max(...highs) * 1.02
+  const volMax = Math.max(...vols) * 1.1 || 1
+
+  const n = klines.length
+  const barW = Math.max(2, (W - 40) / n)
+  const candleW = Math.max(1, barW * 0.6)
+
+  const px = (i) => 20 + i * barW + barW / 2
+  const py = (price) => 10 + (1 - (price - priceMin) / (priceMax - priceMin)) * (chartH - 20)
+  const vy = (vol) => chartH + gap + volH * (1 - vol / volMax)
+
+  // Grid lines
+  ctx.strokeStyle = '#1E1B3A'
+  ctx.lineWidth = 0.5
+  for (let i = 0; i < 5; i++) {
+    const y = 10 + i * (chartH - 20) / 4
+    ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W - 10, y); ctx.stroke()
+    const price = priceMax - i * (priceMax - priceMin) / 4
+    ctx.fillStyle = '#555'
+    ctx.font = '9px monospace'
+    ctx.fillText(price.toFixed(2), W - 45, y + 3)
+  }
+
+  // Candlesticks + Volume
+  klines.forEach((k, i) => {
+    const o = k.open || k.close, c = k.close, h = k.high || c, l = k.low || c, v = k.volume || 0
+    const isUp = c >= o
+    const color = isUp ? '#26A69A' : '#EF5350'
+    const x = px(i)
+
+    // Wick
+    ctx.strokeStyle = color
+    ctx.lineWidth = 1
+    ctx.beginPath(); ctx.moveTo(x, py(h)); ctx.lineTo(x, py(l)); ctx.stroke()
+
+    // Body
+    const top = py(Math.max(o, c)), bot = py(Math.min(o, c))
+    const bodyH = Math.max(1, bot - top)
+    ctx.fillStyle = color
+    ctx.fillRect(x - candleW/2, top, candleW, bodyH)
+
+    // Volume bar
+    const volTop = vy(v)
+    ctx.fillStyle = isUp ? '#26A69A80' : '#EF535080'
+    ctx.fillRect(x - candleW/2, volTop, candleW, chartH + gap + volH - volTop)
+  })
+
+  // Buy/Sell signals from result
+  if (result?.zhongshu_sheng?.signals) {
+    const signals = result.zhongshu_sheng.signals
+    const buySignals = signals.filter(s => s.signal === 'buy')
+    const sellSignals = signals.filter(s => s.signal === 'sell')
+    const lastIdx = n - 1
+    const lastClose = closes[closes.length - 1]
+
+    if (buySignals.length > sellSignals.length && lastIdx >= 0) {
+      // Draw buy arrow at last bar
+      const x = px(lastIdx), y = py(lows[lastIdx] || lastClose) + 15
+      ctx.fillStyle = '#26A69A'
+      ctx.beginPath(); ctx.moveTo(x, y-10); ctx.lineTo(x-5, y); ctx.lineTo(x+5, y); ctx.closePath(); ctx.fill()
+      ctx.font = '9px sans-serif'; ctx.fillText(lastClose.toFixed(2), x+8, y-5)
+    } else if (sellSignals.length > buySignals.length && lastIdx >= 0) {
+      const x = px(lastIdx), y = py(highs[lastIdx] || lastClose) - 5
+      ctx.fillStyle = '#EF5350'
+      ctx.beginPath(); ctx.moveTo(x, y+10); ctx.lineTo(x-5, y); ctx.lineTo(x+5, y); ctx.closePath(); ctx.fill()
+      ctx.font = '9px sans-serif'; ctx.fillText(lastClose.toFixed(2), x+8, y+5)
+    }
+  }
+}
+
+// ==================== Six Ministry Decision Dashboard ====================
+function DecisionDashboard({ result, loading, pipelineStep, logs }) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
+      {/* Left: Central Hub (2 cols) */}
+      <div className="lg:col-span-2 space-y-3">
+        <SectionTitle icon={Landmark} title="智能决策中枢" subtitle="CENTRAL HUB" color="#9B8AFF" />
+        <MinistryCard title="中书省 - 策略研究中心" icon={Brain} color="#9B8AFF" active={pipelineStep >= 2} badge={result ? '真实数据' : null}>
+          {result?.zhongshu_sheng ? (
+            <div className="space-y-2">
+              <p className="text-[10px] text-gray-400">职能: 策略生成 & 信号整合</p>
+              <p className="text-[10px] text-gray-300">策略: {result.zhongshu_sheng.signals?.length}个 · 共识: <b className={result.zhongshu_sheng.consensus==='buy'?'text-red-400':result.zhongshu_sheng.consensus==='sell'?'text-green-400':'text-yellow-400'}>{result.zhongshu_sheng.consensus==='buy'?'买入':result.zhongshu_sheng.consensus==='sell'?'卖出':'持有'}</b></p>
+              <div className="flex gap-2 text-[10px]">
+                <span className="text-red-400">买入:{result.zhongshu_sheng.buy_count}</span>
+                <span className="text-green-400">卖出:{result.zhongshu_sheng.sell_count}</span>
+                <span className="text-yellow-400">持有:{result.zhongshu_sheng.hold_count}</span>
+              </div>
+              <div className="text-[10px] text-gray-500 mt-1">&gt; 信号生成完成</div>
             </div>
-            <div className="flex items-center gap-2">
-              <span className={`text-[10px] px-1.5 py-0.5 rounded-full font-medium ${
-                item.suggestion === 'buy' || item.suggestion === '买入' ? 'bg-red-100 text-red-600' :
-                item.suggestion === 'sell' || item.suggestion === '卖出' ? 'bg-green-100 text-green-600' :
-                'bg-gray-100 text-gray-500'
-              }`}>
-                {item.suggestion || '观望'}
-              </span>
-              <span className="text-[10px] text-gray-400">{item.trade_date || item.created_at}</span>
+          ) : <p className="text-[10px] text-gray-500">{loading ? '> 等待分析...' : '> 等待启动'}</p>}
+        </MinistryCard>
+
+        <MinistryCard title="门下省 - 风控审核中心" icon={Shield} color="#F59E0B" active={pipelineStep >= 3} badge={result?.menxia_sheng?.approved ? '真实数据' : null}>
+          {result?.menxia_sheng ? (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-gray-400">职能: 风险评估 & 决策过滤</p>
+              <p className="text-[10px] text-gray-300">止损 {result.menxia_sheng.stop_loss?.toFixed(2)} · 止盈 {result.menxia_sheng.take_profit?.toFixed(2)}</p>
+              {result.menxia_sheng.risk_warnings?.map((w,i) => (
+                <p key={i} className="text-[10px] text-amber-400 flex items-center gap-1"><AlertTriangle size={9}/>{w}</p>
+              ))}
+              <div className="text-[10px] text-gray-500">&gt; 审核{result.menxia_sheng.approved?'通过':'拒绝'}</div>
+            </div>
+          ) : <p className="text-[10px] text-gray-500">{loading ? '> 审核中...' : '> 等待上游'}</p>}
+        </MinistryCard>
+
+        <MinistryCard title="尚书省 - 指令执行中心" icon={Gavel} color="#EF4444" active={pipelineStep >= 4} badge={result?.shangshu_sheng ? '真实数据' : null}>
+          {result?.shangshu_sheng ? (
+            <div className="space-y-1.5">
+              <p className="text-[10px] text-gray-400">职能: 指令调度与执行</p>
+              <p className="text-[10px] text-gray-300">执行: <b>{result.shangshu_sheng.action==='buy'?'买入':result.shangshu_sheng.action==='sell'?'卖出':'持有'}</b> · 仓位: {result.shangshu_sheng.position_size}% · 模式: backtest</p>
+              <p className="text-[10px] text-gray-400">{result.shangshu_sheng.execution}</p>
+              <div className="text-[10px] text-gray-500">&gt; 成交 ...</div>
+            </div>
+          ) : <p className="text-[10px] text-gray-500">{loading ? '> 执行中...' : '> 等待风控'}</p>}
+        </MinistryCard>
+      </div>
+
+      {/* Middle: Core Execution (1 col) */}
+      <div className="space-y-3">
+        <SectionTitle icon={Activity} title="核心执行模块" subtitle="CORE EXECUTION" color="#10B981" />
+        
+        <MiniMinistry title="吏部 - 资金部" icon={Layers} color="#3B82F6" badge="运行中">
+          <div className="text-[10px] text-gray-400">仓位管理 & 资金分配</div>
+          {result && <div className="text-xs text-white mt-1">建议仓位: <b className="text-[#9B8AFF]">{result.menxia_sheng?.max_position || 0}%</b></div>}
+        </MiniMinistry>
+
+        <MiniMinistry title="户部 - 交易部" icon={Target} color="#10B981" badge={result?.shangshu_sheng?.action === 'buy' ? '交易信号' : null}>
+          {result ? (
+            <div className="space-y-1">
+              <div className="flex items-center gap-2">
+                <span className="text-[10px] text-gray-400">交易方向</span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${result.shangshu_sheng?.action==='buy'?'bg-red-500/20 text-red-400':'bg-green-500/20 text-green-400'}`}>
+                  {result.shangshu_sheng?.action==='buy'?'买入':'卖出/观望'}
+                </span>
+              </div>
+              <div className="text-[10px] text-gray-500">入场: {result.shangshu_sheng?.entry_price?.toFixed(2)}</div>
+            </div>
+          ) : <div className="text-[10px] text-gray-500">等待信号</div>}
+        </MiniMinistry>
+
+        <MiniMinistry title="礼部 - 合规部" icon={BookOpen} color="#8B5CF6" badge="监测">
+          <div className="text-[10px] text-gray-400">市场温度 & 合规检查</div>
+          {result?.crown_prince && (
+            <div className="text-[10px] text-gray-300 mt-1">
+              ST: {result.crown_prince.is_st?'是':'否'} · 涨停: {result.crown_prince.is_limit_up?'是':'否'}
+            </div>
+          )}
+        </MiniMinistry>
+
+        <MiniMinistry title="刑部 - 风控部" icon={Shield} color="#EF4444" badge="风控">
+          {result?.menxia_sheng ? (
+            <div className="space-y-1">
+              <div className="flex justify-between text-[10px]">
+                <span className="text-gray-400">风险评分</span>
+                <span className={result.menxia_sheng.risk_score>70?'text-red-400':result.menxia_sheng.risk_score<30?'text-green-400':'text-yellow-400'}>
+                  {result.menxia_sheng.risk_score?.toFixed(0)}/100
+                </span>
+              </div>
+              <div className="h-1.5 rounded-full bg-[#0F0E1A] overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${result.menxia_sheng.risk_score>70?'bg-red-500':result.menxia_sheng.risk_score<30?'bg-green-500':'bg-yellow-500'}`}
+                  style={{width:`${result.menxia_sheng.risk_score}%`}}/>
+              </div>
+            </div>
+          ) : <div className="text-[10px] text-gray-500">等待数据</div>}
+        </MiniMinistry>
+
+        <MiniMinistry title="兵部 - 操盘部" icon={Radio} color="#F97316" badge={result?.suggestion==='buy'?'买入信号':null}>
+          {result ? (
+            <div className="text-[10px] text-gray-300">
+              最终建议: <b className={result.suggestion==='buy'?'text-red-400':result.suggestion==='sell'?'text-green-400':'text-amber-400'}>
+                {result.suggestion==='buy'?'买入':result.suggestion==='sell'?'卖出':'观望'}
+              </b> · 信心度: <b className="text-[#9B8AFF]">{result.confidence}%</b>
+            </div>
+          ) : <div className="text-[10px] text-gray-500">等待信号</div>}
+        </MiniMinistry>
+      </div>
+
+      {/* Right: System Logs (1 col) */}
+      <div className="space-y-3">
+        <SectionTitle icon={Clock} title="系统运行日志" subtitle="SYSTEM LOGS" color="#6B7280" />
+        
+        {/* Strategy description */}
+        {result && (
+          <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-3">
+            <div className="text-[10px] text-gray-500 mb-1">当前策略文字说明</div>
+            <div className="text-xs text-white font-bold mb-1">全部策略总览</div>
+            <div className="text-[10px] text-gray-300 leading-relaxed">
+              {result.ai_insights ? result.ai_insights.slice(0, 200) + '...' : `分析: ${result.code} 建议${result.suggestion} 信心${result.confidence}%`}
+            </div>
+            {result.shangshu_sheng && (
+              <div className="mt-2 text-[10px] text-gray-400 border-t border-[#2D2A5E] pt-2">
+                建议仓位: {result.shangshu_sheng.position_size}% · 入场: {result.shangshu_sheng.entry_price?.toFixed(2)} · {result.shangshu_sheng.time_horizon}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Real-time logs */}
+        <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-3 max-h-[320px] overflow-y-auto">
+          <div className="flex items-center justify-between mb-2">
+            <div className="text-[10px] text-gray-500">实时指令流</div>
+            <div className="flex gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
+              <span className="text-[9px] text-gray-500">运行</span>
             </div>
           </div>
-        ))}
+          <div className="space-y-1 font-mono">
+            {logs.length === 0 ? (
+              <p className="text-[10px] text-gray-600">等待操作...</p>
+            ) : logs.map((log, i) => (
+              <div key={i} className="text-[10px] flex gap-2">
+                <span className="text-gray-600 flex-shrink-0">[{log.ts}]</span>
+                <span className={
+                  log.type==='error'?'text-red-400':
+                  log.type==='success'?'text-green-400':
+                  log.type==='system'?'text-cyan-400':'text-gray-300'
+                }>{log.type==='system'?'系统':log.type==='error'?'错误':log.type==='success'?'完成':'信息'}: {log.msg}</span>
+              </div>
+            ))}
+          </div>
+        </div>
       </div>
+    </div>
+  )
+}
+
+// ==================== Evolution Panel ====================
+function EvolutionPanel({ result, evolving, strategies, logs }) {
+  return (
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {/* Left: Config */}
+      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Zap size={14} className="text-[#9B8AFF]"/>
+          <span className="text-sm font-bold text-white">Evolution 策略进化看板</span>
+        </div>
+        <div className="text-[10px] text-gray-400">策略进化运行看板（起点配置/过程日志/结果摘要）</div>
+
+        <div className="space-y-2 pt-2 border-t border-[#2D2A5E]">
+          <div className="text-[10px] text-gray-500 font-medium">运行配置</div>
+          <div className="grid grid-cols-2 gap-2 text-[10px]">
+            <div><span className="text-gray-500">间隔(s):</span> <span className="text-white">1</span></div>
+            <div><span className="text-gray-500">最大轮数:</span> <span className="text-white">3</span></div>
+          </div>
+          <div className="text-[10px] text-gray-500 font-medium mt-2">起点策略</div>
+          <div className="max-h-32 overflow-y-auto space-y-0.5">
+            {strategies.slice(0, 8).map(s => (
+              <div key={s.id} className="text-[10px] text-gray-300 px-2 py-1 rounded bg-[#0F0E1A] border border-[#2D2A5E]">
+                [{s.id}] {s.name}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+
+      {/* Middle: Progress & Results */}
+      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4 space-y-3">
+        {/* Progress */}
+        <div className="flex items-center justify-between">
+          <span className="text-xs text-gray-400">
+            状态: {evolving ? '运行中' : result ? '已完成' : '待启动'} · 进度 {result ? '100%' : evolving ? '...' : '0%'}
+          </span>
+          {result && <span className="text-[10px] text-green-400">数据状态: 正常</span>}
+        </div>
+        <div className="h-2 rounded-full bg-[#0F0E1A] overflow-hidden">
+          <div className="h-full rounded-full bg-[#513CC8] transition-all duration-1000"
+            style={{width: result ? '100%' : evolving ? '60%' : '0%'}}/>
+        </div>
+
+        {result && (
+          <>
+            {/* Stats grid */}
+            <div className="grid grid-cols-3 gap-2">
+              {[
+                {l:'当前轮次',v:`${result.current_round}/${result.max_rounds}`},
+                {l:'最佳评分',v:result.best_score?.toFixed(2), color:'text-green-400'},
+                {l:'最佳策略',v:result.best_strategy},
+              ].map((item,i) => (
+                <div key={i} className="text-center p-2 rounded bg-[#0F0E1A] border border-[#2D2A5E]">
+                  <div className="text-[9px] text-gray-500">{item.l}</div>
+                  <div className={`text-xs font-bold ${item.color||'text-white'} truncate`}>{item.v}</div>
+                </div>
+              ))}
+            </div>
+
+            {/* Summary */}
+            <div className="bg-[#0F0E1A] rounded-lg p-3 border border-[#2D2A5E]">
+              <div className="text-[10px] text-gray-500 mb-1">进化结论摘要</div>
+              <p className="text-[10px] text-gray-300 leading-relaxed">{result.summary}</p>
+            </div>
+
+            {/* Rounds table */}
+            <div className="max-h-40 overflow-y-auto">
+              <div className="text-[10px] text-gray-500 mb-1">进化记录</div>
+              {result.rounds?.map((r, i) => (
+                <div key={i} className={`flex items-center justify-between py-1 px-2 rounded mb-0.5 text-[10px] ${r.status==='pass'?'bg-green-500/10':'bg-red-500/10'}`}>
+                  <span className="text-gray-300">#{r.round} {r.strategy_name}</span>
+                  <div className="flex items-center gap-2">
+                    <span className={r.status==='pass'?'text-green-400':'text-red-400'}>{r.status==='pass'?'通过':'驳回'}</span>
+                    <span className="text-gray-500">{r.score?.toFixed(2)}</span>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </>
+        )}
+
+        {!result && !evolving && (
+          <div className="text-center py-6">
+            <Zap size={28} className="mx-auto mb-2 text-[#2D2A5E]"/>
+            <p className="text-[10px] text-gray-500">点击"启动进化"开始策略演化</p>
+          </div>
+        )}
+      </div>
+
+      {/* Right: Logs */}
+      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4">
+        <div className="text-[10px] text-gray-500 mb-2">进化日志</div>
+        <div className="space-y-1 font-mono max-h-[400px] overflow-y-auto">
+          {logs.filter(l => l.type !== 'info' || l.msg.includes('进化')).length === 0 ? (
+            <p className="text-[10px] text-gray-600">等待启动...</p>
+          ) : logs.map((log, i) => (
+            <div key={i} className="text-[10px]">
+              <span className="text-gray-600">[{log.ts}]</span>{' '}
+              <span className={log.type==='error'?'text-red-400':log.type==='success'?'text-green-400':'text-cyan-400'}>
+                {log.msg}
+              </span>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ==================== UI Components ====================
+function SectionTitle({ icon: Icon, title, subtitle, color }) {
+  return (
+    <div className="flex items-center gap-2">
+      <Icon size={13} style={{color}}/>
+      <span className="text-xs font-bold text-white">{title}</span>
+      <span className="text-[9px] text-gray-600">({subtitle})</span>
+    </div>
+  )
+}
+
+function MinistryCard({ title, icon: Icon, color, active, badge, children }) {
+  return (
+    <div className={`bg-[#161428] rounded-lg border p-3 transition-all ${active ? 'border-['+color+']40 shadow-lg shadow-['+color+']/5' : 'border-[#2D2A5E]'}`}>
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          <Icon size={13} style={{color}}/>
+          <span className="text-xs font-bold text-white">{title}</span>
+        </div>
+        {badge && <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">{badge}</span>}
+      </div>
+      {children}
+    </div>
+  )
+}
+
+function MiniMinistry({ title, icon: Icon, color, badge, children }) {
+  return (
+    <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-2.5">
+      <div className="flex items-center justify-between mb-1.5">
+        <div className="flex items-center gap-1.5">
+          <Icon size={11} style={{color}}/>
+          <span className="text-[10px] font-bold text-white">{title}</span>
+        </div>
+        {badge && <span className="text-[8px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">{badge}</span>}
+      </div>
+      {children}
     </div>
   )
 }

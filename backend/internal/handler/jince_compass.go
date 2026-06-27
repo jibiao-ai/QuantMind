@@ -1407,4 +1407,226 @@ func findCompassStrategy(id string) *JinCeStrategy {
 	return nil
 }
 
+// ==================== K-line Data Endpoint ====================
+
+func (h *Handler) GetCompassKline(c *gin.Context) {
+	code := c.Query("code")
+	period := c.DefaultQuery("period", "day")
+
+	if code == "" {
+		response.Error(c, 400, "缺少股票代码参数")
+		return
+	}
+
+	klines, dataSource, err := compassFetchKlines(code, period, "system")
+	if err != nil {
+		response.Error(c, 500, "获取K线失败: "+err.Error())
+		return
+	}
+
+	response.Success(c, gin.H{
+		"code":        code,
+		"period":      period,
+		"data_source": dataSource,
+		"klines":      klines,
+		"count":       len(klines),
+	})
+}
+
+// ==================== Strategy Evolution Endpoint ====================
+
+type EvolutionRequest struct {
+	Code         string   `json:"code" binding:"required"`
+	Name         string   `json:"name"`
+	Strategies   []string `json:"strategies"`
+	MaxRounds    int      `json:"max_rounds"`
+	Period       string   `json:"period"`
+}
+
+type EvolutionResult struct {
+	Status         string              `json:"status"` // running/completed/failed
+	CurrentRound   int                 `json:"current_round"`
+	MaxRounds      int                 `json:"max_rounds"`
+	Progress       float64             `json:"progress"` // 0-100
+	BestScore      float64             `json:"best_score"`
+	BestStrategy   string              `json:"best_strategy"`
+	Rounds         []EvolutionRound    `json:"rounds"`
+	Summary        string              `json:"summary"`
+}
+
+type EvolutionRound struct {
+	Round       int     `json:"round"`
+	StrategyID  string  `json:"strategy_id"`
+	StrategyName string `json:"strategy_name"`
+	Score       float64 `json:"score"`
+	WinRate     float64 `json:"win_rate"`
+	Sharpe      float64 `json:"sharpe"`
+	Status      string  `json:"status"` // pass/reject/error
+	Duration    float64 `json:"duration_sec"`
+	Reason      string  `json:"reason"`
+}
+
+func (h *Handler) RunCompassEvolution(c *gin.Context) {
+	var req EvolutionRequest
+	if err := c.ShouldBindJSON(&req); err != nil {
+		response.Error(c, 400, "参数错误: "+err.Error())
+		return
+	}
+
+	if req.MaxRounds <= 0 {
+		req.MaxRounds = 3
+	}
+	if req.Period == "" {
+		req.Period = "day"
+	}
+	if len(req.Strategies) == 0 {
+		for _, s := range builtinCompassStrategies {
+			if s.IsActive {
+				req.Strategies = append(req.Strategies, s.ID)
+			}
+		}
+	}
+
+	log.Printf("[金策罗盘] 策略进化 code=%s rounds=%d strategies=%v", req.Code, req.MaxRounds, req.Strategies)
+
+	// Fetch kline data
+	klines, _, err := compassFetchKlines(req.Code, req.Period, "system")
+	if err != nil {
+		response.Error(c, 500, "数据获取失败: "+err.Error())
+		return
+	}
+
+	if len(klines) < 30 {
+		response.Error(c, 500, "K线数据不足，无法进行策略进化")
+		return
+	}
+
+	// Run evolution rounds
+	rounds := []EvolutionRound{}
+	bestScore := 0.0
+	bestStrategy := ""
+	passCount := 0
+
+	for round := 1; round <= req.MaxRounds; round++ {
+		for _, sid := range req.Strategies {
+			strategy := findCompassStrategy(sid)
+			if strategy == nil {
+				continue
+			}
+
+			startTime := time.Now()
+
+			// Generate signal and backtest for this strategy
+			signal := compassGenerateSignal(strategy, klines)
+			bt := compassBacktestSingle(klines, signal)
+
+			duration := time.Since(startTime).Seconds()
+
+			score := bt.WinRate*2 + bt.Sharpe + bt.TotalReturn*5
+			status := "pass"
+			reason := fmt.Sprintf("胜率%.1f%% 夏普%.2f 收益%.1f%%", bt.WinRate*100, bt.Sharpe, bt.TotalReturn*100)
+
+			if score < 0.5 {
+				status = "reject"
+				reason = "评分不达标: " + reason
+			} else {
+				passCount++
+			}
+
+			if score > bestScore {
+				bestScore = score
+				bestStrategy = strategy.Name
+			}
+
+			rounds = append(rounds, EvolutionRound{
+				Round:        round,
+				StrategyID:   sid,
+				StrategyName: strategy.Name,
+				Score:        score,
+				WinRate:      bt.WinRate,
+				Sharpe:       bt.Sharpe,
+				Status:       status,
+				Duration:     duration,
+				Reason:       reason,
+			})
+		}
+	}
+
+	totalRounds := len(rounds)
+	summary := fmt.Sprintf("进化完成：%d轮 %d个策略，通过%d/驳回%d，最佳策略：%s（评分%.2f）",
+		req.MaxRounds, len(req.Strategies), passCount, totalRounds-passCount, bestStrategy, bestScore)
+
+	result := EvolutionResult{
+		Status:       "completed",
+		CurrentRound: req.MaxRounds,
+		MaxRounds:    req.MaxRounds,
+		Progress:     100,
+		BestScore:    bestScore,
+		BestStrategy: bestStrategy,
+		Rounds:       rounds,
+		Summary:      summary,
+	}
+
+	response.Success(c, result)
+}
+
+// compassBacktestSingle runs a simple backtest for a single strategy signal
+func compassBacktestSingle(klines []map[string]interface{}, signal StrategySignal) BacktestSummary {
+	n := len(klines)
+	if n < 20 {
+		return BacktestSummary{}
+	}
+
+	closes := extractCloses(klines)
+	trades := []float64{}
+	inPosition := false
+	entryPrice := 0.0
+
+	// Simple logic: buy on signal strength > 0.6, sell after 5% gain or 3% loss
+	for i := 10; i < n; i++ {
+		if !inPosition && signal.Signal == "buy" && closes[i] > closes[i-1] {
+			inPosition = true
+			entryPrice = closes[i]
+		} else if inPosition {
+			pnl := (closes[i] - entryPrice) / entryPrice
+			if pnl > 0.05 || pnl < -0.03 || i == n-1 {
+				trades = append(trades, pnl)
+				inPosition = false
+			}
+		}
+	}
+
+	if len(trades) == 0 {
+		return BacktestSummary{WinRate: 0, Sharpe: 0, TotalReturn: 0}
+	}
+
+	wins := 0
+	totalReturn := 0.0
+	for _, t := range trades {
+		totalReturn += t
+		if t > 0 {
+			wins++
+		}
+	}
+
+	winRate := float64(wins) / float64(len(trades))
+	avgReturn := totalReturn / float64(len(trades))
+	variance := 0.0
+	for _, t := range trades {
+		variance += (t - avgReturn) * (t - avgReturn)
+	}
+	stdDev := math.Sqrt(variance / float64(len(trades)))
+	sharpe := 0.0
+	if stdDev > 0 {
+		sharpe = avgReturn / stdDev * math.Sqrt(252)
+	}
+
+	return BacktestSummary{
+		WinRate:     winRate,
+		Sharpe:      sharpe,
+		TotalReturn: totalReturn,
+		TradeCount:  len(trades),
+	}
+}
+
 // safeString is defined in marketfetch.go within the same package

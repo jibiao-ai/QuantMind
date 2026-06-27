@@ -153,6 +153,8 @@ func main() {
 		auth.GET("/compass/strategies", h.GetJinCeStrategies)
 		auth.POST("/compass/analyze", h.RunJinCeAnalysis)
 		auth.GET("/compass/history", h.GetJinCeHistory)
+		auth.GET("/compass/kline", h.GetCompassKline)
+		auth.POST("/compass/evolve", h.RunCompassEvolution)
 
 		// Today's stock picks (all users can read)
 		auth.GET("/stock-picks/today", h.GetTodayPicks)
