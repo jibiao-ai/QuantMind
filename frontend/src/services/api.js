@@ -169,4 +169,9 @@ export const getDataF10 = (params) => api.get('/data/f10', { params })
 export const getDataAnnounce = (params) => api.get('/data/announce', { params })
 export const validateStockCode = (params) => api.get('/data/validate-stock', { params })
 
+// 金策罗盘 (Jin Ce Compass)
+export const getCompassStrategies = () => api.get('/compass/strategies')
+export const runCompassAnalysis = (data) => api.post('/compass/analyze', data)
+export const getCompassHistory = (params) => api.get('/compass/history', { params })
+
 export default api

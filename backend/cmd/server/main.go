@@ -149,6 +149,11 @@ func main() {
 		auth.POST("/decision/push-test/:channel", h.TestPushNotification)
 		auth.GET("/decision/news", h.GetStockNews)
 
+		// 金策罗盘 (Jin Ce Compass)
+		auth.GET("/compass/strategies", h.GetJinCeStrategies)
+		auth.POST("/compass/analyze", h.RunJinCeAnalysis)
+		auth.GET("/compass/history", h.GetJinCeHistory)
+
 		// Today's stock picks (all users can read)
 		auth.GET("/stock-picks/today", h.GetTodayPicks)
 

@@ -2,7 +2,7 @@ import useStore from '../store/useStore'
 import { 
   LayoutDashboard, TrendingUp, Brain, MessageSquare, Stethoscope, 
   Crown, BarChart3, Settings, Users, Shield, ChevronLeft, ChevronRight,
-  Activity, Zap, Bot, Database, FileText, LogOut, Star, Flame, Megaphone, Target, Radio, Bookmark, X
+  Activity, Zap, Bot, Database, FileText, LogOut, Star, Flame, Megaphone, Target, Radio, Bookmark, X, Compass
 } from 'lucide-react'
 
 const menuItems = [
@@ -16,6 +16,7 @@ const menuItems = [
   { key: 'hot-list', label: '市场热榜', icon: Flame, group: '市场总览' },
   { key: 'ai-stock-pick', label: '隔夜套利', icon: Target, group: '市场总览' },
   { key: 'xiaofan-select', label: '小樊精选', icon: Bookmark, group: '市场总览' },
+  { key: 'jince-compass', label: '金策罗盘', icon: Compass, group: '市场总览' },
   // === AI智能体功能已隐藏（暂时关闭） ===
   // { key: 'smart-ask', label: '智能问股', icon: MessageSquare, group: 'AI智能体' },
   // { key: 'smart-diagnose', label: '智能诊股', icon: Stethoscope, group: 'AI智能体' },
