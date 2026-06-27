@@ -194,6 +194,11 @@ export default function JinCeCompassPage() {
         activeView={activeView}
       />
 
+      {/* Strategy Overview - Full Width above grid */}
+      {activeView === 'decision' && (
+        <StrategyOverview result={result} loading={loading} pipelineStep={pipelineStep} />
+      )}
+
       {/* Main Content */}
       {activeView === 'decision' && (
         <DecisionDashboard result={result} loading={loading} pipelineStep={pipelineStep} logs={logs} />
@@ -438,6 +443,166 @@ function drawChart(canvas, klines, result) {
   }
 }
 
+// ==================== Strategy Overview (Full Width, Glassmorphism) ====================
+function StrategyOverview({ result, loading, pipelineStep }) {
+  if (!result && !loading) return null
+
+  // Pipeline steps for visual flow
+  const steps = [
+    { name: '数据校验', icon: Shield, done: pipelineStep >= 1 },
+    { name: '策略生成', icon: Brain, done: pipelineStep >= 2 },
+    { name: '风控审核', icon: Shield, done: pipelineStep >= 3 },
+    { name: '指令执行', icon: Gavel, done: pipelineStep >= 4 },
+    { name: '结果输出', icon: CheckCircle, done: pipelineStep >= 5 },
+  ]
+
+  return (
+    <div className="relative overflow-hidden rounded-2xl border border-white/60 p-4 md:p-5 transition-all duration-500 animate-[fadeIn_0.5s_ease-out]"
+      style={{
+        background: 'rgba(255,255,255,0.7)',
+        backdropFilter: 'blur(12px)',
+        WebkitBackdropFilter: 'blur(12px)',
+        boxShadow: '0 4px 24px rgba(81,60,200,0.06), 0 1px 3px rgba(0,0,0,0.04)',
+      }}>
+      {/* Background gradient decoration */}
+      <div className="absolute -top-20 -right-20 w-60 h-60 rounded-full opacity-20 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #513CC8 0%, transparent 70%)' }} />
+      <div className="absolute -bottom-16 -left-16 w-40 h-40 rounded-full opacity-10 pointer-events-none"
+        style={{ background: 'radial-gradient(circle, #10B981 0%, transparent 70%)' }} />
+
+      {/* Title */}
+      <div className="flex items-center justify-between mb-4 relative z-10">
+        <div className="flex items-center gap-2">
+          <div className="w-8 h-8 rounded-xl flex items-center justify-center"
+            style={{ background: 'linear-gradient(135deg, #513CC8, #6B5AD5)' }}>
+            <Compass size={16} className="text-white" />
+          </div>
+          <div>
+            <h3 className="text-sm font-bold text-gray-800">全部策略总览</h3>
+            <p className="text-[10px] text-gray-400">Strategy Overview & Pipeline Status</p>
+          </div>
+        </div>
+        {result && (
+          <div className="flex items-center gap-2">
+            <span className={`text-xs font-bold px-2.5 py-1 rounded-full transition-all duration-300 ${
+              result.suggestion === 'buy' ? 'bg-red-50 text-red-600 border border-red-200' :
+              result.suggestion === 'sell' ? 'bg-green-50 text-green-600 border border-green-200' :
+              'bg-amber-50 text-amber-600 border border-amber-200'
+            }`} style={{ animation: 'bounceIn 0.6s ease' }}>
+              {result.suggestion === 'buy' ? '买入' : result.suggestion === 'sell' ? '卖出' : '观望'}
+            </span>
+            <span className="text-sm font-bold" style={{ color: '#513CC8' }}>{result.confidence}%</span>
+          </div>
+        )}
+      </div>
+
+      {/* Pipeline Flow Steps */}
+      <div className="flex items-center gap-1 mb-4 relative z-10">
+        {steps.map((step, i) => {
+          const StepIcon = step.icon
+          return (
+            <div key={i} className="flex items-center flex-1">
+              <div className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-xl text-[10px] font-medium transition-all duration-500 ${
+                step.done
+                  ? 'bg-[#513CC8]/10 text-[#513CC8] border border-[#513CC8]/20 scale-100'
+                  : 'bg-gray-50 text-gray-400 border border-gray-100 scale-95'
+              }`} style={{ animation: step.done ? `scaleIn 0.4s ease ${i * 0.1}s both` : 'none' }}>
+                <StepIcon size={10} />
+                <span className="hidden sm:inline">{step.name}</span>
+              </div>
+              {i < steps.length - 1 && (
+                <div className={`flex-1 h-[2px] mx-1 rounded transition-all duration-700 ${step.done ? 'bg-[#513CC8]/30' : 'bg-gray-100'}`} />
+              )}
+            </div>
+          )
+        })}
+      </div>
+
+      {/* Overview Cards Grid */}
+      {result ? (
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 relative z-10">
+          {/* Card 1: Consensus */}
+          <div className="rounded-xl p-3 border border-white/80 transition-all duration-300 hover:scale-[1.02] hover:shadow-md"
+            style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Brain size={12} className="text-[#513CC8]" />
+              <span className="text-[10px] text-gray-500">策略共识</span>
+            </div>
+            <div className={`text-lg font-bold ${
+              result.zhongshu_sheng?.consensus === 'buy' ? 'text-red-500' :
+              result.zhongshu_sheng?.consensus === 'sell' ? 'text-green-500' : 'text-amber-500'
+            }`}>
+              {result.zhongshu_sheng?.consensus === 'buy' ? '看多' :
+               result.zhongshu_sheng?.consensus === 'sell' ? '看空' : '中性'}
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1">
+              买:{result.zhongshu_sheng?.buy_count} 卖:{result.zhongshu_sheng?.sell_count} 持:{result.zhongshu_sheng?.hold_count}
+            </div>
+          </div>
+
+          {/* Card 2: Risk Score */}
+          <div className="rounded-xl p-3 border border-white/80 transition-all duration-300 hover:scale-[1.02] hover:shadow-md"
+            style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Shield size={12} className="text-amber-500" />
+              <span className="text-[10px] text-gray-500">风险评分</span>
+            </div>
+            <div className="text-lg font-bold text-gray-800">
+              {result.menxia_sheng?.risk_score?.toFixed(0) || '—'}<span className="text-xs text-gray-400">/100</span>
+            </div>
+            <div className="h-1.5 rounded-full bg-gray-100 mt-2 overflow-hidden">
+              <div className={`h-full rounded-full transition-all duration-1000 ${
+                (result.menxia_sheng?.risk_score || 0) > 70 ? 'bg-red-500' :
+                (result.menxia_sheng?.risk_score || 0) < 30 ? 'bg-green-500' : 'bg-amber-500'
+              }`} style={{ width: `${result.menxia_sheng?.risk_score || 0}%` }} />
+            </div>
+          </div>
+
+          {/* Card 3: Position & Entry */}
+          <div className="rounded-xl p-3 border border-white/80 transition-all duration-300 hover:scale-[1.02] hover:shadow-md"
+            style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Target size={12} className="text-green-500" />
+              <span className="text-[10px] text-gray-500">仓位建议</span>
+            </div>
+            <div className="text-lg font-bold text-gray-800">
+              {result.shangshu_sheng?.position_size || 0}<span className="text-xs text-gray-400">%</span>
+            </div>
+            <div className="text-[10px] text-gray-400 mt-1">
+              入场: {result.shangshu_sheng?.entry_price?.toFixed(2) || '—'}
+            </div>
+          </div>
+
+          {/* Card 4: AI Insights */}
+          <div className="rounded-xl p-3 border border-white/80 transition-all duration-300 hover:scale-[1.02] hover:shadow-md"
+            style={{ background: 'rgba(255,255,255,0.8)', backdropFilter: 'blur(8px)' }}>
+            <div className="flex items-center gap-1.5 mb-2">
+              <Zap size={12} className="text-[#513CC8]" />
+              <span className="text-[10px] text-gray-500">AI洞察</span>
+            </div>
+            <p className="text-[10px] text-gray-600 leading-relaxed line-clamp-3">
+              {result.ai_insights ? result.ai_insights.slice(0, 120) + '...' :
+                `${result.code} ${result.suggestion === 'buy' ? '建议买入' : result.suggestion === 'sell' ? '建议卖出' : '建议观望'}, 信心度${result.confidence}%, ${result.shangshu_sheng?.time_horizon || '短线'}`}
+            </p>
+          </div>
+        </div>
+      ) : loading ? (
+        <div className="flex items-center justify-center py-6 relative z-10">
+          <Loader2 size={20} className="animate-spin text-[#513CC8] mr-2" />
+          <span className="text-sm text-gray-500">六部决策流程运行中...</span>
+        </div>
+      ) : null}
+
+      {/* Inline CSS for animations */}
+      <style>{`
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: translateY(0); } }
+        @keyframes scaleIn { from { opacity: 0; transform: scale(0.9); } to { opacity: 1; transform: scale(1); } }
+        @keyframes bounceIn { 0% { transform: scale(0.8); } 50% { transform: scale(1.05); } 100% { transform: scale(1); } }
+      `}</style>
+    </div>
+  )
+}
+
 // ==================== Six Ministry Decision Dashboard (3 equal cols) ====================
 function DecisionDashboard({ result, loading, pipelineStep, logs }) {
   return (
@@ -553,22 +718,6 @@ function DecisionDashboard({ result, loading, pipelineStep, logs }) {
       {/* Column 3: 系统运行日志 */}
       <div className="space-y-3">
         <SectionTitle icon={Clock} title="系统运行日志" subtitle="SYSTEM LOGS" color="#6B7280" />
-        
-        {/* Strategy description */}
-        {result && (
-          <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
-            <div className="text-[10px] text-gray-500 mb-1">当前策略文字说明</div>
-            <div className="text-xs text-gray-800 font-bold mb-1">全部策略总览</div>
-            <div className="text-[10px] text-gray-600 leading-relaxed">
-              {result.ai_insights ? result.ai_insights.slice(0, 200) + '...' : `分析: ${result.code} 建议${result.suggestion} 信心${result.confidence}%`}
-            </div>
-            {result.shangshu_sheng && (
-              <div className="mt-2 text-[10px] text-gray-500 border-t border-gray-100 pt-2">
-                建议仓位: {result.shangshu_sheng.position_size}% · 入场: {result.shangshu_sheng.entry_price?.toFixed(2)} · {result.shangshu_sheng.time_horizon}
-              </div>
-            )}
-          </div>
-        )}
 
         {/* Real-time logs */}
         <div className="bg-white rounded-lg border border-gray-200 p-3 max-h-[380px] overflow-y-auto shadow-sm">
