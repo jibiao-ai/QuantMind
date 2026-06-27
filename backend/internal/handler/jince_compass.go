@@ -1407,11 +1407,4 @@ func findCompassStrategy(id string) *JinCeStrategy {
 	return nil
 }
 
-func safeString(m map[string]interface{}, key string) string {
-	if v, ok := m[key]; ok {
-		if s, ok := v.(string); ok {
-			return s
-		}
-	}
-	return ""
-}
+// safeString is defined in marketfetch.go within the same package
