@@ -6,31 +6,24 @@ import {
 } from 'lucide-react'
 
 const menuItems = [
+  // 市场总览
   { key: 'dashboard', label: '看板大屏', icon: LayoutDashboard, group: '市场总览' },
   { key: 'realtime', label: '实时行情', icon: TrendingUp, group: '市场总览' },
   { key: 'broadcast', label: '股市播报', icon: Radio, group: '市场总览' },
   { key: 'hotmoney-board', label: '游资打板', icon: Zap, group: '市场总览' },
-  { key: 'stock-decision', label: '买卖决策', icon: Brain, group: '市场总览' },
-  { key: 'master-judge', label: '大师研判', icon: Crown, group: '市场总览' },
-  { key: 'watchlist', label: '自选个股', icon: Star, group: '市场总览' },
   { key: 'hot-list', label: '市场热榜', icon: Flame, group: '市场总览' },
-  { key: 'ai-stock-pick', label: '隔夜套利', icon: Target, group: '市场总览' },
-  { key: 'xiaofan-select', label: '小樊精选', icon: Bookmark, group: '市场总览' },
-  { key: 'jince-compass', label: '金策罗盘', icon: Compass, group: '市场总览' },
-  // === AI智能体功能已隐藏（暂时关闭） ===
-  // { key: 'smart-ask', label: '智能问股', icon: MessageSquare, group: 'AI智能体' },
-  // { key: 'smart-diagnose', label: '智能诊股', icon: Stethoscope, group: 'AI智能体' },
-  // { key: 'main-flow', label: '主力动向', icon: Activity, group: 'AI智能体' },
-  // { key: 'quant-expert', label: '量化专家', icon: Brain, group: 'AI智能体' },
-  // === 策略中心功能已隐藏（暂时关闭） ===
-  // { key: 'strategies', label: '策略中心', icon: Crown, group: '量化策略' },
-  // { key: 'signals', label: '策略信号', icon: Zap, group: '量化策略' },
+  // 研判智策
+  { key: 'stock-decision', label: '买卖决策', icon: Brain, group: '研判智策' },
+  { key: 'master-judge', label: '大师研判', icon: Crown, group: '研判智策' },
+  { key: 'ai-stock-pick', label: '隔夜套利', icon: Target, group: '研判智策' },
+  { key: 'jince-compass', label: '金策罗盘', icon: Compass, group: '研判智策' },
+  // 小樊推荐
+  { key: 'watchlist', label: '自选个股', icon: Star, group: '小樊推荐' },
+  { key: 'xiaofan-select', label: '小樊精选', icon: Bookmark, group: '小樊推荐' },
+  // 系统管理
   { key: 'stock-picks', label: '今日推荐', icon: Megaphone, group: '系统管理', adminOnly: true },
-  // === 智能体/AI模型管理已隐藏（暂时关闭） ===
-  // { key: 'agents', label: '智能体管理', icon: Bot, group: '系统管理' },
-  // { key: 'ai-models', label: 'AI模型管理', icon: Database, group: '系统管理' },
-  { key: 'users', label: '用户管理', icon: Users, group: '系统管理' },
-  { key: 'audit-logs', label: '审计日志', icon: Shield, group: '系统管理' },
+  { key: 'users', label: '用户管理', icon: Users, group: '系统管理', adminOnly: true },
+  { key: 'audit-logs', label: '审计日志', icon: Shield, group: '系统管理', adminOnly: true },
   { key: 'settings', label: '系统设置', icon: Settings, group: '系统管理', adminOnly: true },
 ]
 
