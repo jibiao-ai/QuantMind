@@ -4,11 +4,11 @@ import {
   Compass, Play, Loader2, CheckCircle, XCircle, AlertTriangle,
   TrendingUp, TrendingDown, Minus, Shield, Brain, Target, Zap,
   BarChart3, Activity, Clock, ChevronDown, ArrowRight, Square,
-  RefreshCw, Settings, Layers, Radio, BookOpen, Gavel, Landmark
+  RefreshCw, Settings, Layers, Radio, BookOpen, Gavel, Landmark, History
 } from 'lucide-react'
 import toast from 'react-hot-toast'
 
-// ==================== 金策罗盘 V2 ====================
+// ==================== 金策罗盘 V2 - White Theme ====================
 export default function JinCeCompassPage() {
   const [code, setCode] = useState('')
   const [stockName, setStockName] = useState('')
@@ -25,6 +25,7 @@ export default function JinCeCompassPage() {
   const [evolving, setEvolving] = useState(false)
   const [logs, setLogs] = useState([])
   const [pipelineStep, setPipelineStep] = useState(-1)
+  const [history, setHistory] = useState([])
 
   useEffect(() => {
     const load = async () => {
@@ -37,7 +38,18 @@ export default function JinCeCompassPage() {
       } catch (e) {}
     }
     load()
+    // Load history from localStorage
+    try {
+      const saved = localStorage.getItem('jince_compass_history')
+      if (saved) setHistory(JSON.parse(saved))
+    } catch (e) {}
   }, [])
+
+  const saveHistory = (record) => {
+    const newHistory = [record, ...history.filter(h => h.code !== record.code || h.time !== record.time)].slice(0, 20)
+    setHistory(newHistory)
+    localStorage.setItem('jince_compass_history', JSON.stringify(newHistory))
+  }
 
   const addLog = (type, msg) => {
     const ts = new Date().toLocaleTimeString('zh-CN', { hour12: false })
@@ -85,6 +97,16 @@ export default function JinCeCompassPage() {
         setTimeout(() => { setPipelineStep(4); addLog('info', `尚书省: 执行建议 - ${res.data.shangshu_sheng?.action}`) }, 1000)
         setTimeout(() => { setPipelineStep(5); addLog('success', `分析完成: 建议=${res.data.suggestion} 信心度=${res.data.confidence}%`) }, 1500)
         toast.success('六部决策完成')
+        // Save to history
+        saveHistory({
+          code: code.trim(),
+          stock_name: res.data.stock_name || stockName || code.trim(),
+          suggestion: res.data.suggestion,
+          confidence: res.data.confidence,
+          time: new Date().toLocaleTimeString('zh-CN', { hour: '2-digit', minute: '2-digit' }),
+          date: new Date().toLocaleDateString('zh-CN'),
+          result: res.data,
+        })
       } else {
         toast.error(res?.message || '分析失败')
         addLog('error', res?.message || '分析失败')
@@ -121,14 +143,24 @@ export default function JinCeCompassPage() {
     setEvolving(false)
   }, [code, stockName, selectedStrategies, period])
 
+  const loadHistory = (record) => {
+    setCode(record.code)
+    setStockName(record.stock_name || '')
+    if (record.result) {
+      setResult(record.result)
+      setPipelineStep(5)
+      setLogs([{ ts: '—', type: 'info', msg: `加载 ${record.stock_name} 历史分析结果` }])
+    }
+  }
+
   return (
-    <div className="p-3 md:p-4 space-y-3" style={{ background: '#0F0E1A', minHeight: '100vh' }}>
+    <div className="p-3 md:p-4 space-y-3" style={{ background: '#F8F9FC', minHeight: '100vh' }}>
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <Compass size={20} className="text-[#9B8AFF]" />
-          <h1 className="text-lg font-bold text-white">金策罗盘</h1>
-          <span className="text-[10px] px-2 py-0.5 rounded bg-[#1E1B3A] text-[#9B8AFF] border border-[#2D2A5E]">
+          <Compass size={20} style={{ color: '#513CC8' }} />
+          <h1 className="text-lg font-bold gradient-text">金策罗盘</h1>
+          <span className="text-[10px] px-2 py-0.5 rounded bg-[#F0EDFA] text-[#513CC8] border border-[#513CC8]/20">
             {strategies.length} 策略
           </span>
         </div>
@@ -140,7 +172,7 @@ export default function JinCeCompassPage() {
           ].map(v => (
             <button key={v.key} onClick={() => setActiveView(v.key)}
               className={`flex items-center gap-1 px-3 py-1.5 rounded-lg text-xs font-medium transition ${
-                activeView === v.key ? 'bg-[#513CC8] text-white' : 'bg-[#1E1B3A] text-gray-400 hover:text-white border border-[#2D2A5E]'
+                activeView === v.key ? 'bg-[#513CC8] text-white shadow-sm' : 'bg-white text-gray-500 hover:text-[#513CC8] border border-gray-200 hover:border-[#513CC8]/30'
               }`}>
               <v.icon size={11} />{v.label}
             </button>
@@ -172,6 +204,41 @@ export default function JinCeCompassPage() {
       {activeView === 'evolution' && (
         <EvolutionPanel result={evolutionResult} evolving={evolving} strategies={strategies} logs={logs} />
       )}
+
+      {/* History Section */}
+      {history.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex items-center gap-1.5 px-1">
+            <History size={12} className="text-gray-400" />
+            <span className="text-[10px] text-gray-500 font-medium">历史分析记录</span>
+          </div>
+          <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+            {history.map((record, i) => (
+              <HistoryCard key={i} record={record} onClick={() => loadHistory(record)} />
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+// ==================== History Card (matching 大师研判 format) ====================
+function HistoryCard({ record, onClick }) {
+  const suggestionColor = record.suggestion === 'buy' ? '#EF4444' : record.suggestion === 'sell' ? '#22C55E' : '#F59E0B'
+  const suggestionText = record.suggestion === 'buy' ? '买入' : record.suggestion === 'sell' ? '卖出' : '观望'
+  const suggestionBg = record.suggestion === 'buy' ? 'bg-red-50 text-red-600' : record.suggestion === 'sell' ? 'bg-green-50 text-green-600' : 'bg-amber-50 text-amber-600'
+  return (
+    <div onClick={onClick} className="flex-shrink-0 w-36 p-2.5 rounded-xl border border-gray-100 bg-white hover:border-[#513CC8]/30 hover:shadow-sm cursor-pointer transition-all">
+      <div className="flex items-center justify-between mb-1">
+        <span className="text-[10px] font-bold text-gray-800 truncate">{record.stock_name || record.code}</span>
+        <span className="text-[10px] font-bold" style={{ color: suggestionColor }}>{record.confidence}%</span>
+      </div>
+      <div className="flex items-center justify-between">
+        <span className="text-[9px] text-gray-400">{record.code}</span>
+        <span className={`text-[8px] px-1 py-0.5 rounded ${suggestionBg}`}>{suggestionText}</span>
+      </div>
+      <div className="text-[8px] text-gray-400 mt-1">{record.date} {record.time}</div>
     </div>
   )
 }
@@ -180,24 +247,24 @@ export default function JinCeCompassPage() {
 function ControlBar({ code, setCode, stockName, setStockName, period, setPeriod, dataSource, setDataSource, mode, setMode, strategies, selectedStrategies, setSelectedStrategies, loading, onAnalyze, evolving, onEvolve, activeView }) {
   const [showStrats, setShowStrats] = useState(false)
   return (
-    <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-3">
+    <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
       <div className="flex flex-wrap gap-3 items-end">
         <div className="flex-1 min-w-[180px]">
           <label className="text-[10px] text-gray-500 mb-1 block">股票代码</label>
           <div className="flex gap-2">
             <input type="text" value={code} onChange={e => setCode(e.target.value)}
               placeholder="600519" onKeyDown={e => e.key === 'Enter' && onAnalyze()}
-              className="flex-1 px-3 py-1.5 rounded-lg bg-[#0F0E1A] border border-[#2D2A5E] text-white text-sm placeholder-gray-600 focus:border-[#513CC8] outline-none" />
+              className="flex-1 px-3 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm placeholder-gray-400 focus:border-[#513CC8] focus:ring-2 focus:ring-[#513CC8]/20 outline-none" />
             <input type="text" value={stockName} onChange={e => setStockName(e.target.value)}
               placeholder="名称"
-              className="w-20 px-2 py-1.5 rounded-lg bg-[#0F0E1A] border border-[#2D2A5E] text-white text-sm placeholder-gray-600 outline-none" />
+              className="w-20 px-2 py-1.5 rounded-lg bg-gray-50 border border-gray-200 text-gray-800 text-sm placeholder-gray-400 outline-none" />
           </div>
         </div>
         <div>
           <label className="text-[10px] text-gray-500 mb-1 block">周期</label>
           <div className="flex gap-1">
             {['day','week','month'].map(p => (
-              <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium ${period===p?'bg-[#513CC8] text-white':'bg-[#0F0E1A] text-gray-400 border border-[#2D2A5E]'}`}>
+              <button key={p} onClick={() => setPeriod(p)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium transition ${period===p?'bg-[#513CC8] text-white':'bg-gray-50 text-gray-500 border border-gray-200 hover:border-[#513CC8]/30'}`}>
                 {{day:'日K',week:'周K',month:'月K'}[p]}
               </button>
             ))}
@@ -207,7 +274,7 @@ function ControlBar({ code, setCode, stockName, setStockName, period, setPeriod,
           <label className="text-[10px] text-gray-500 mb-1 block">数据源</label>
           <div className="flex gap-1">
             {[{k:'system',l:'系统'},{k:'akshare',l:'AkShare'},{k:'eastmoney',l:'东财'}].map(d => (
-              <button key={d.k} onClick={() => setDataSource(d.k)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium ${dataSource===d.k?'bg-[#513CC8] text-white':'bg-[#0F0E1A] text-gray-400 border border-[#2D2A5E]'}`}>
+              <button key={d.k} onClick={() => setDataSource(d.k)} className={`px-2.5 py-1.5 rounded text-[10px] font-medium transition ${dataSource===d.k?'bg-[#513CC8] text-white':'bg-gray-50 text-gray-500 border border-gray-200 hover:border-[#513CC8]/30'}`}>
                 {d.l}
               </button>
             ))}
@@ -215,25 +282,26 @@ function ControlBar({ code, setCode, stockName, setStockName, period, setPeriod,
         </div>
         <div className="relative">
           <label className="text-[10px] text-gray-500 mb-1 block">策略</label>
-          <button onClick={() => setShowStrats(!showStrats)} className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-[#0F0E1A] border border-[#2D2A5E] text-gray-300 text-[10px]">
-            <Target size={10} className="text-[#9B8AFF]" />{selectedStrategies.length}/{strategies.length}<ChevronDown size={9}/>
+          <button onClick={() => setShowStrats(!showStrats)} className="flex items-center gap-1 px-2.5 py-1.5 rounded bg-gray-50 border border-gray-200 text-gray-600 text-[10px] hover:border-[#513CC8]/30">
+            <Target size={10} className="text-[#513CC8]" />{selectedStrategies.length}/{strategies.length}<ChevronDown size={9}/>
           </button>
           {showStrats && (
-            <div className="absolute top-full mt-1 left-0 z-50 bg-[#161428] rounded-lg border border-[#2D2A5E] p-2 w-64 max-h-56 overflow-y-auto shadow-xl">
+            <div className="absolute top-full mt-1 left-0 z-50 bg-white rounded-lg border border-gray-200 p-2 w-64 max-h-56 overflow-y-auto shadow-xl">
               {strategies.map(s => (
-                <label key={s.id} className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-[#1E1B3A] text-[10px] text-gray-300">
+                <label key={s.id} className="flex items-center gap-2 py-1 px-2 rounded cursor-pointer hover:bg-[#F0EDFA] text-[10px] text-gray-600">
                   <input type="checkbox" checked={selectedStrategies.includes(s.id)}
                     onChange={() => setSelectedStrategies(prev => prev.includes(s.id)?prev.filter(x=>x!==s.id):[...prev,s.id])}
-                    className="w-3 h-3 rounded border-gray-600 text-[#513CC8]" />
+                    className="w-3 h-3 rounded border-gray-300 text-[#513CC8]" />
                   <span className="flex-1">{s.name}</span>
-                  <span className="text-gray-600">{s.category}</span>
+                  <span className="text-gray-400">{s.category}</span>
                 </label>
               ))}
             </div>
           )}
         </div>
         <button onClick={activeView === 'evolution' ? onEvolve : onAnalyze} disabled={loading || evolving}
-          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white bg-[#513CC8] hover:bg-[#6B52E0] transition disabled:opacity-50 shadow-lg shadow-[#513CC8]/20">
+          className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition disabled:opacity-50 shadow-sm"
+          style={{ background: '#513CC8' }}>
           {(loading||evolving) ? <Loader2 size={13} className="animate-spin"/> : <Play size={13}/>}
           {loading?'分析中...':evolving?'进化中...':activeView==='evolution'?'启动进化':'开始分析'}
         </button>
@@ -253,18 +321,18 @@ function KlineChart({ klineData, result, code, onLoad }) {
 
   if (!klineData || !klineData.klines?.length) {
     return (
-      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-8 text-center">
-        <BarChart3 size={36} className="mx-auto mb-3 text-[#2D2A5E]" />
+      <div className="bg-white rounded-xl border border-gray-200 p-8 text-center shadow-sm">
+        <BarChart3 size={36} className="mx-auto mb-3 text-gray-300" />
         <p className="text-sm text-gray-500">输入股票代码并执行分析后显示K线图表</p>
-        {code && <button onClick={() => onLoad(code)} className="mt-3 px-4 py-1.5 rounded bg-[#513CC8] text-white text-xs">加载K线</button>}
+        {code && <button onClick={() => onLoad(code)} className="mt-3 px-4 py-1.5 rounded text-white text-xs" style={{background:'#513CC8'}}>加载K线</button>}
       </div>
     )
   }
 
   return (
-    <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-3">
+    <div className="bg-white rounded-xl border border-gray-200 p-3 shadow-sm">
       <div className="flex items-center justify-between mb-2">
-        <span className="text-xs text-gray-400">{code} · {klineData.period} · {klineData.data_source} · {klineData.count}根</span>
+        <span className="text-xs text-gray-500">{code} · {klineData.period} · {klineData.data_source} · {klineData.count}根</span>
         <div className="flex items-center gap-3 text-[10px]">
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-red-500"/>买入</span>
           <span className="flex items-center gap-1"><span className="w-2 h-2 rounded-full bg-green-500"/>卖出</span>
@@ -286,7 +354,8 @@ function drawChart(canvas, klines, result) {
   const W = rect.width, H = 320
   const chartH = H * 0.7, volH = H * 0.25, gap = H * 0.05
 
-  ctx.fillStyle = '#0F0E1A'
+  // White background
+  ctx.fillStyle = '#FFFFFF'
   ctx.fillRect(0, 0, W, H)
 
   if (!klines.length) return
@@ -311,13 +380,13 @@ function drawChart(canvas, klines, result) {
   const vy = (vol) => chartH + gap + volH * (1 - vol / volMax)
 
   // Grid lines
-  ctx.strokeStyle = '#1E1B3A'
+  ctx.strokeStyle = '#F0F0F0'
   ctx.lineWidth = 0.5
   for (let i = 0; i < 5; i++) {
     const y = 10 + i * (chartH - 20) / 4
     ctx.beginPath(); ctx.moveTo(20, y); ctx.lineTo(W - 10, y); ctx.stroke()
     const price = priceMax - i * (priceMax - priceMin) / 4
-    ctx.fillStyle = '#555'
+    ctx.fillStyle = '#999'
     ctx.font = '9px monospace'
     ctx.fillText(price.toFixed(2), W - 45, y + 3)
   }
@@ -326,7 +395,7 @@ function drawChart(canvas, klines, result) {
   klines.forEach((k, i) => {
     const o = k.open || k.close, c = k.close, h = k.high || c, l = k.low || c, v = k.volume || 0
     const isUp = c >= o
-    const color = isUp ? '#26A69A' : '#EF5350'
+    const color = isUp ? '#EF4444' : '#22C55E'
     const x = px(i)
 
     // Wick
@@ -342,7 +411,7 @@ function drawChart(canvas, klines, result) {
 
     // Volume bar
     const volTop = vy(v)
-    ctx.fillStyle = isUp ? '#26A69A80' : '#EF535080'
+    ctx.fillStyle = isUp ? '#EF444440' : '#22C55E40'
     ctx.fillRect(x - candleW/2, volTop, candleW, chartH + gap + volH - volTop)
   })
 
@@ -357,92 +426,92 @@ function drawChart(canvas, klines, result) {
     if (buySignals.length > sellSignals.length && lastIdx >= 0) {
       // Draw buy arrow at last bar
       const x = px(lastIdx), y = py(lows[lastIdx] || lastClose) + 15
-      ctx.fillStyle = '#26A69A'
+      ctx.fillStyle = '#EF4444'
       ctx.beginPath(); ctx.moveTo(x, y-10); ctx.lineTo(x-5, y); ctx.lineTo(x+5, y); ctx.closePath(); ctx.fill()
       ctx.font = '9px sans-serif'; ctx.fillText(lastClose.toFixed(2), x+8, y-5)
     } else if (sellSignals.length > buySignals.length && lastIdx >= 0) {
       const x = px(lastIdx), y = py(highs[lastIdx] || lastClose) - 5
-      ctx.fillStyle = '#EF5350'
+      ctx.fillStyle = '#22C55E'
       ctx.beginPath(); ctx.moveTo(x, y+10); ctx.lineTo(x-5, y); ctx.lineTo(x+5, y); ctx.closePath(); ctx.fill()
       ctx.font = '9px sans-serif'; ctx.fillText(lastClose.toFixed(2), x+8, y+5)
     }
   }
 }
 
-// ==================== Six Ministry Decision Dashboard ====================
+// ==================== Six Ministry Decision Dashboard (3 equal cols) ====================
 function DecisionDashboard({ result, loading, pipelineStep, logs }) {
   return (
-    <div className="grid grid-cols-1 lg:grid-cols-4 gap-3">
-      {/* Left: Central Hub (2 cols) */}
-      <div className="lg:col-span-2 space-y-3">
-        <SectionTitle icon={Landmark} title="智能决策中枢" subtitle="CENTRAL HUB" color="#9B8AFF" />
-        <MinistryCard title="中书省 - 策略研究中心" icon={Brain} color="#9B8AFF" active={pipelineStep >= 2} badge={result ? '真实数据' : null}>
+    <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
+      {/* Column 1: 智能决策中枢 */}
+      <div className="space-y-3">
+        <SectionTitle icon={Landmark} title="智能决策中枢" subtitle="CENTRAL HUB" color="#513CC8" />
+        <MinistryCard title="中书省 - 策略研究中心" icon={Brain} color="#513CC8" active={pipelineStep >= 2} badge={result ? '真实数据' : null}>
           {result?.zhongshu_sheng ? (
             <div className="space-y-2">
-              <p className="text-[10px] text-gray-400">职能: 策略生成 & 信号整合</p>
-              <p className="text-[10px] text-gray-300">策略: {result.zhongshu_sheng.signals?.length}个 · 共识: <b className={result.zhongshu_sheng.consensus==='buy'?'text-red-400':result.zhongshu_sheng.consensus==='sell'?'text-green-400':'text-yellow-400'}>{result.zhongshu_sheng.consensus==='buy'?'买入':result.zhongshu_sheng.consensus==='sell'?'卖出':'持有'}</b></p>
+              <p className="text-[10px] text-gray-500">职能: 策略生成 & 信号整合</p>
+              <p className="text-[10px] text-gray-700">策略: {result.zhongshu_sheng.signals?.length}个 · 共识: <b className={result.zhongshu_sheng.consensus==='buy'?'text-red-500':result.zhongshu_sheng.consensus==='sell'?'text-green-500':'text-amber-500'}>{result.zhongshu_sheng.consensus==='buy'?'买入':result.zhongshu_sheng.consensus==='sell'?'卖出':'持有'}</b></p>
               <div className="flex gap-2 text-[10px]">
-                <span className="text-red-400">买入:{result.zhongshu_sheng.buy_count}</span>
-                <span className="text-green-400">卖出:{result.zhongshu_sheng.sell_count}</span>
-                <span className="text-yellow-400">持有:{result.zhongshu_sheng.hold_count}</span>
+                <span className="text-red-500">买入:{result.zhongshu_sheng.buy_count}</span>
+                <span className="text-green-500">卖出:{result.zhongshu_sheng.sell_count}</span>
+                <span className="text-amber-500">持有:{result.zhongshu_sheng.hold_count}</span>
               </div>
-              <div className="text-[10px] text-gray-500 mt-1">&gt; 信号生成完成</div>
+              <div className="text-[10px] text-gray-400 mt-1">&gt; 信号生成完成</div>
             </div>
-          ) : <p className="text-[10px] text-gray-500">{loading ? '> 等待分析...' : '> 等待启动'}</p>}
+          ) : <p className="text-[10px] text-gray-400">{loading ? '> 等待分析...' : '> 等待启动'}</p>}
         </MinistryCard>
 
         <MinistryCard title="门下省 - 风控审核中心" icon={Shield} color="#F59E0B" active={pipelineStep >= 3} badge={result?.menxia_sheng?.approved ? '真实数据' : null}>
           {result?.menxia_sheng ? (
             <div className="space-y-1.5">
-              <p className="text-[10px] text-gray-400">职能: 风险评估 & 决策过滤</p>
-              <p className="text-[10px] text-gray-300">止损 {result.menxia_sheng.stop_loss?.toFixed(2)} · 止盈 {result.menxia_sheng.take_profit?.toFixed(2)}</p>
+              <p className="text-[10px] text-gray-500">职能: 风险评估 & 决策过滤</p>
+              <p className="text-[10px] text-gray-700">止损 {result.menxia_sheng.stop_loss?.toFixed(2)} · 止盈 {result.menxia_sheng.take_profit?.toFixed(2)}</p>
               {result.menxia_sheng.risk_warnings?.map((w,i) => (
-                <p key={i} className="text-[10px] text-amber-400 flex items-center gap-1"><AlertTriangle size={9}/>{w}</p>
+                <p key={i} className="text-[10px] text-amber-600 flex items-center gap-1"><AlertTriangle size={9}/>{w}</p>
               ))}
-              <div className="text-[10px] text-gray-500">&gt; 审核{result.menxia_sheng.approved?'通过':'拒绝'}</div>
+              <div className="text-[10px] text-gray-400">&gt; 审核{result.menxia_sheng.approved?'通过':'拒绝'}</div>
             </div>
-          ) : <p className="text-[10px] text-gray-500">{loading ? '> 审核中...' : '> 等待上游'}</p>}
+          ) : <p className="text-[10px] text-gray-400">{loading ? '> 审核中...' : '> 等待上游'}</p>}
         </MinistryCard>
 
         <MinistryCard title="尚书省 - 指令执行中心" icon={Gavel} color="#EF4444" active={pipelineStep >= 4} badge={result?.shangshu_sheng ? '真实数据' : null}>
           {result?.shangshu_sheng ? (
             <div className="space-y-1.5">
-              <p className="text-[10px] text-gray-400">职能: 指令调度与执行</p>
-              <p className="text-[10px] text-gray-300">执行: <b>{result.shangshu_sheng.action==='buy'?'买入':result.shangshu_sheng.action==='sell'?'卖出':'持有'}</b> · 仓位: {result.shangshu_sheng.position_size}% · 模式: backtest</p>
-              <p className="text-[10px] text-gray-400">{result.shangshu_sheng.execution}</p>
-              <div className="text-[10px] text-gray-500">&gt; 成交 ...</div>
+              <p className="text-[10px] text-gray-500">职能: 指令调度与执行</p>
+              <p className="text-[10px] text-gray-700">执行: <b>{result.shangshu_sheng.action==='buy'?'买入':result.shangshu_sheng.action==='sell'?'卖出':'持有'}</b> · 仓位: {result.shangshu_sheng.position_size}% · 模式: backtest</p>
+              <p className="text-[10px] text-gray-500">{result.shangshu_sheng.execution}</p>
+              <div className="text-[10px] text-gray-400">&gt; 成交 ...</div>
             </div>
-          ) : <p className="text-[10px] text-gray-500">{loading ? '> 执行中...' : '> 等待风控'}</p>}
+          ) : <p className="text-[10px] text-gray-400">{loading ? '> 执行中...' : '> 等待风控'}</p>}
         </MinistryCard>
       </div>
 
-      {/* Middle: Core Execution (1 col) */}
+      {/* Column 2: 核心执行模块 */}
       <div className="space-y-3">
         <SectionTitle icon={Activity} title="核心执行模块" subtitle="CORE EXECUTION" color="#10B981" />
         
         <MiniMinistry title="吏部 - 资金部" icon={Layers} color="#3B82F6" badge="运行中">
-          <div className="text-[10px] text-gray-400">仓位管理 & 资金分配</div>
-          {result && <div className="text-xs text-white mt-1">建议仓位: <b className="text-[#9B8AFF]">{result.menxia_sheng?.max_position || 0}%</b></div>}
+          <div className="text-[10px] text-gray-500">仓位管理 & 资金分配</div>
+          {result && <div className="text-xs text-gray-800 mt-1">建议仓位: <b className="text-[#513CC8]">{result.menxia_sheng?.max_position || 0}%</b></div>}
         </MiniMinistry>
 
         <MiniMinistry title="户部 - 交易部" icon={Target} color="#10B981" badge={result?.shangshu_sheng?.action === 'buy' ? '交易信号' : null}>
           {result ? (
             <div className="space-y-1">
               <div className="flex items-center gap-2">
-                <span className="text-[10px] text-gray-400">交易方向</span>
-                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${result.shangshu_sheng?.action==='buy'?'bg-red-500/20 text-red-400':'bg-green-500/20 text-green-400'}`}>
+                <span className="text-[10px] text-gray-500">交易方向</span>
+                <span className={`text-xs font-bold px-1.5 py-0.5 rounded ${result.shangshu_sheng?.action==='buy'?'bg-red-50 text-red-600':'bg-green-50 text-green-600'}`}>
                   {result.shangshu_sheng?.action==='buy'?'买入':'卖出/观望'}
                 </span>
               </div>
               <div className="text-[10px] text-gray-500">入场: {result.shangshu_sheng?.entry_price?.toFixed(2)}</div>
             </div>
-          ) : <div className="text-[10px] text-gray-500">等待信号</div>}
+          ) : <div className="text-[10px] text-gray-400">等待信号</div>}
         </MiniMinistry>
 
         <MiniMinistry title="礼部 - 合规部" icon={BookOpen} color="#8B5CF6" badge="监测">
-          <div className="text-[10px] text-gray-400">市场温度 & 合规检查</div>
+          <div className="text-[10px] text-gray-500">市场温度 & 合规检查</div>
           {result?.crown_prince && (
-            <div className="text-[10px] text-gray-300 mt-1">
+            <div className="text-[10px] text-gray-600 mt-1">
               ST: {result.crown_prince.is_st?'是':'否'} · 涨停: {result.crown_prince.is_limit_up?'是':'否'}
             </div>
           )}
@@ -452,44 +521,49 @@ function DecisionDashboard({ result, loading, pipelineStep, logs }) {
           {result?.menxia_sheng ? (
             <div className="space-y-1">
               <div className="flex justify-between text-[10px]">
-                <span className="text-gray-400">风险评分</span>
-                <span className={result.menxia_sheng.risk_score>70?'text-red-400':result.menxia_sheng.risk_score<30?'text-green-400':'text-yellow-400'}>
+                <span className="text-gray-500">风险评分</span>
+                <span className={result.menxia_sheng.risk_score>70?'text-red-500':result.menxia_sheng.risk_score<30?'text-green-500':'text-amber-500'}>
                   {result.menxia_sheng.risk_score?.toFixed(0)}/100
                 </span>
               </div>
-              <div className="h-1.5 rounded-full bg-[#0F0E1A] overflow-hidden">
-                <div className={`h-full rounded-full transition-all ${result.menxia_sheng.risk_score>70?'bg-red-500':result.menxia_sheng.risk_score<30?'bg-green-500':'bg-yellow-500'}`}
+              <div className="h-1.5 rounded-full bg-gray-100 overflow-hidden">
+                <div className={`h-full rounded-full transition-all ${result.menxia_sheng.risk_score>70?'bg-red-500':result.menxia_sheng.risk_score<30?'bg-green-500':'bg-amber-500'}`}
                   style={{width:`${result.menxia_sheng.risk_score}%`}}/>
               </div>
             </div>
-          ) : <div className="text-[10px] text-gray-500">等待数据</div>}
+          ) : <div className="text-[10px] text-gray-400">等待数据</div>}
         </MiniMinistry>
 
         <MiniMinistry title="兵部 - 操盘部" icon={Radio} color="#F97316" badge={result?.suggestion==='buy'?'买入信号':null}>
           {result ? (
-            <div className="text-[10px] text-gray-300">
-              最终建议: <b className={result.suggestion==='buy'?'text-red-400':result.suggestion==='sell'?'text-green-400':'text-amber-400'}>
+            <div className="text-[10px] text-gray-700">
+              最终建议: <b className={result.suggestion==='buy'?'text-red-500':result.suggestion==='sell'?'text-green-500':'text-amber-500'}>
                 {result.suggestion==='buy'?'买入':result.suggestion==='sell'?'卖出':'观望'}
-              </b> · 信心度: <b className="text-[#9B8AFF]">{result.confidence}%</b>
+              </b> · 信心度: <b className="text-[#513CC8]">{result.confidence}%</b>
             </div>
-          ) : <div className="text-[10px] text-gray-500">等待信号</div>}
+          ) : <div className="text-[10px] text-gray-400">等待信号</div>}
+        </MiniMinistry>
+
+        <MiniMinistry title="工部 - 数据部" icon={BarChart3} color="#0891B2" badge="在线">
+          <div className="text-[10px] text-gray-500">数据采集 & 指标计算</div>
+          {result && <div className="text-[10px] text-gray-600 mt-1">数据源: {result.data_source || 'system'} · K线已加载</div>}
         </MiniMinistry>
       </div>
 
-      {/* Right: System Logs (1 col) */}
+      {/* Column 3: 系统运行日志 */}
       <div className="space-y-3">
         <SectionTitle icon={Clock} title="系统运行日志" subtitle="SYSTEM LOGS" color="#6B7280" />
         
         {/* Strategy description */}
         {result && (
-          <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-3">
+          <div className="bg-white rounded-lg border border-gray-200 p-3 shadow-sm">
             <div className="text-[10px] text-gray-500 mb-1">当前策略文字说明</div>
-            <div className="text-xs text-white font-bold mb-1">全部策略总览</div>
-            <div className="text-[10px] text-gray-300 leading-relaxed">
+            <div className="text-xs text-gray-800 font-bold mb-1">全部策略总览</div>
+            <div className="text-[10px] text-gray-600 leading-relaxed">
               {result.ai_insights ? result.ai_insights.slice(0, 200) + '...' : `分析: ${result.code} 建议${result.suggestion} 信心${result.confidence}%`}
             </div>
             {result.shangshu_sheng && (
-              <div className="mt-2 text-[10px] text-gray-400 border-t border-[#2D2A5E] pt-2">
+              <div className="mt-2 text-[10px] text-gray-500 border-t border-gray-100 pt-2">
                 建议仓位: {result.shangshu_sheng.position_size}% · 入场: {result.shangshu_sheng.entry_price?.toFixed(2)} · {result.shangshu_sheng.time_horizon}
               </div>
             )}
@@ -497,24 +571,24 @@ function DecisionDashboard({ result, loading, pipelineStep, logs }) {
         )}
 
         {/* Real-time logs */}
-        <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-3 max-h-[320px] overflow-y-auto">
+        <div className="bg-white rounded-lg border border-gray-200 p-3 max-h-[380px] overflow-y-auto shadow-sm">
           <div className="flex items-center justify-between mb-2">
             <div className="text-[10px] text-gray-500">实时指令流</div>
             <div className="flex gap-1">
               <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse"/>
-              <span className="text-[9px] text-gray-500">运行</span>
+              <span className="text-[9px] text-gray-400">运行</span>
             </div>
           </div>
           <div className="space-y-1 font-mono">
             {logs.length === 0 ? (
-              <p className="text-[10px] text-gray-600">等待操作...</p>
+              <p className="text-[10px] text-gray-400">等待操作...</p>
             ) : logs.map((log, i) => (
               <div key={i} className="text-[10px] flex gap-2">
-                <span className="text-gray-600 flex-shrink-0">[{log.ts}]</span>
+                <span className="text-gray-400 flex-shrink-0">[{log.ts}]</span>
                 <span className={
-                  log.type==='error'?'text-red-400':
-                  log.type==='success'?'text-green-400':
-                  log.type==='system'?'text-cyan-400':'text-gray-300'
+                  log.type==='error'?'text-red-500':
+                  log.type==='success'?'text-green-500':
+                  log.type==='system'?'text-[#513CC8]':'text-gray-600'
                 }>{log.type==='system'?'系统':log.type==='error'?'错误':log.type==='success'?'完成':'信息'}: {log.msg}</span>
               </div>
             ))}
@@ -530,23 +604,23 @@ function EvolutionPanel({ result, evolving, strategies, logs }) {
   return (
     <div className="grid grid-cols-1 lg:grid-cols-3 gap-3">
       {/* Left: Config */}
-      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4 space-y-3">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
         <div className="flex items-center gap-2">
-          <Zap size={14} className="text-[#9B8AFF]"/>
-          <span className="text-sm font-bold text-white">Evolution 策略进化看板</span>
+          <Zap size={14} className="text-[#513CC8]"/>
+          <span className="text-sm font-bold text-gray-800">Evolution 策略进化看板</span>
         </div>
-        <div className="text-[10px] text-gray-400">策略进化运行看板（起点配置/过程日志/结果摘要）</div>
+        <div className="text-[10px] text-gray-500">策略进化运行看板（起点配置/过程日志/结果摘要）</div>
 
-        <div className="space-y-2 pt-2 border-t border-[#2D2A5E]">
+        <div className="space-y-2 pt-2 border-t border-gray-100">
           <div className="text-[10px] text-gray-500 font-medium">运行配置</div>
           <div className="grid grid-cols-2 gap-2 text-[10px]">
-            <div><span className="text-gray-500">间隔(s):</span> <span className="text-white">1</span></div>
-            <div><span className="text-gray-500">最大轮数:</span> <span className="text-white">3</span></div>
+            <div><span className="text-gray-500">间隔(s):</span> <span className="text-gray-800">1</span></div>
+            <div><span className="text-gray-500">最大轮数:</span> <span className="text-gray-800">3</span></div>
           </div>
           <div className="text-[10px] text-gray-500 font-medium mt-2">起点策略</div>
           <div className="max-h-32 overflow-y-auto space-y-0.5">
             {strategies.slice(0, 8).map(s => (
-              <div key={s.id} className="text-[10px] text-gray-300 px-2 py-1 rounded bg-[#0F0E1A] border border-[#2D2A5E]">
+              <div key={s.id} className="text-[10px] text-gray-600 px-2 py-1 rounded bg-gray-50 border border-gray-100">
                 [{s.id}] {s.name}
               </div>
             ))}
@@ -555,17 +629,17 @@ function EvolutionPanel({ result, evolving, strategies, logs }) {
       </div>
 
       {/* Middle: Progress & Results */}
-      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4 space-y-3">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 space-y-3 shadow-sm">
         {/* Progress */}
         <div className="flex items-center justify-between">
-          <span className="text-xs text-gray-400">
+          <span className="text-xs text-gray-500">
             状态: {evolving ? '运行中' : result ? '已完成' : '待启动'} · 进度 {result ? '100%' : evolving ? '...' : '0%'}
           </span>
-          {result && <span className="text-[10px] text-green-400">数据状态: 正常</span>}
+          {result && <span className="text-[10px] text-green-500">数据状态: 正常</span>}
         </div>
-        <div className="h-2 rounded-full bg-[#0F0E1A] overflow-hidden">
-          <div className="h-full rounded-full bg-[#513CC8] transition-all duration-1000"
-            style={{width: result ? '100%' : evolving ? '60%' : '0%'}}/>
+        <div className="h-2 rounded-full bg-gray-100 overflow-hidden">
+          <div className="h-full rounded-full transition-all duration-1000"
+            style={{width: result ? '100%' : evolving ? '60%' : '0%', background: '#513CC8'}}/>
         </div>
 
         {result && (
@@ -574,30 +648,30 @@ function EvolutionPanel({ result, evolving, strategies, logs }) {
             <div className="grid grid-cols-3 gap-2">
               {[
                 {l:'当前轮次',v:`${result.current_round}/${result.max_rounds}`},
-                {l:'最佳评分',v:result.best_score?.toFixed(2), color:'text-green-400'},
+                {l:'最佳评分',v:result.best_score?.toFixed(2), color:'text-green-500'},
                 {l:'最佳策略',v:result.best_strategy},
               ].map((item,i) => (
-                <div key={i} className="text-center p-2 rounded bg-[#0F0E1A] border border-[#2D2A5E]">
+                <div key={i} className="text-center p-2 rounded bg-gray-50 border border-gray-100">
                   <div className="text-[9px] text-gray-500">{item.l}</div>
-                  <div className={`text-xs font-bold ${item.color||'text-white'} truncate`}>{item.v}</div>
+                  <div className={`text-xs font-bold ${item.color||'text-gray-800'} truncate`}>{item.v}</div>
                 </div>
               ))}
             </div>
 
             {/* Summary */}
-            <div className="bg-[#0F0E1A] rounded-lg p-3 border border-[#2D2A5E]">
+            <div className="bg-gray-50 rounded-lg p-3 border border-gray-100">
               <div className="text-[10px] text-gray-500 mb-1">进化结论摘要</div>
-              <p className="text-[10px] text-gray-300 leading-relaxed">{result.summary}</p>
+              <p className="text-[10px] text-gray-700 leading-relaxed">{result.summary}</p>
             </div>
 
             {/* Rounds table */}
             <div className="max-h-40 overflow-y-auto">
               <div className="text-[10px] text-gray-500 mb-1">进化记录</div>
               {result.rounds?.map((r, i) => (
-                <div key={i} className={`flex items-center justify-between py-1 px-2 rounded mb-0.5 text-[10px] ${r.status==='pass'?'bg-green-500/10':'bg-red-500/10'}`}>
-                  <span className="text-gray-300">#{r.round} {r.strategy_name}</span>
+                <div key={i} className={`flex items-center justify-between py-1 px-2 rounded mb-0.5 text-[10px] ${r.status==='pass'?'bg-green-50':'bg-red-50'}`}>
+                  <span className="text-gray-700">#{r.round} {r.strategy_name}</span>
                   <div className="flex items-center gap-2">
-                    <span className={r.status==='pass'?'text-green-400':'text-red-400'}>{r.status==='pass'?'通过':'驳回'}</span>
+                    <span className={r.status==='pass'?'text-green-600':'text-red-500'}>{r.status==='pass'?'通过':'驳回'}</span>
                     <span className="text-gray-500">{r.score?.toFixed(2)}</span>
                   </div>
                 </div>
@@ -608,22 +682,22 @@ function EvolutionPanel({ result, evolving, strategies, logs }) {
 
         {!result && !evolving && (
           <div className="text-center py-6">
-            <Zap size={28} className="mx-auto mb-2 text-[#2D2A5E]"/>
-            <p className="text-[10px] text-gray-500">点击"启动进化"开始策略演化</p>
+            <Zap size={28} className="mx-auto mb-2 text-gray-300"/>
+            <p className="text-[10px] text-gray-400">点击"启动进化"开始策略演化</p>
           </div>
         )}
       </div>
 
       {/* Right: Logs */}
-      <div className="bg-[#161428] rounded-xl border border-[#2D2A5E] p-4">
+      <div className="bg-white rounded-xl border border-gray-200 p-4 shadow-sm">
         <div className="text-[10px] text-gray-500 mb-2">进化日志</div>
         <div className="space-y-1 font-mono max-h-[400px] overflow-y-auto">
           {logs.filter(l => l.type !== 'info' || l.msg.includes('进化')).length === 0 ? (
-            <p className="text-[10px] text-gray-600">等待启动...</p>
+            <p className="text-[10px] text-gray-400">等待启动...</p>
           ) : logs.map((log, i) => (
             <div key={i} className="text-[10px]">
-              <span className="text-gray-600">[{log.ts}]</span>{' '}
-              <span className={log.type==='error'?'text-red-400':log.type==='success'?'text-green-400':'text-cyan-400'}>
+              <span className="text-gray-400">[{log.ts}]</span>{' '}
+              <span className={log.type==='error'?'text-red-500':log.type==='success'?'text-green-500':'text-[#513CC8]'}>
                 {log.msg}
               </span>
             </div>
@@ -639,21 +713,21 @@ function SectionTitle({ icon: Icon, title, subtitle, color }) {
   return (
     <div className="flex items-center gap-2">
       <Icon size={13} style={{color}}/>
-      <span className="text-xs font-bold text-white">{title}</span>
-      <span className="text-[9px] text-gray-600">({subtitle})</span>
+      <span className="text-xs font-bold text-gray-800">{title}</span>
+      <span className="text-[9px] text-gray-400">({subtitle})</span>
     </div>
   )
 }
 
 function MinistryCard({ title, icon: Icon, color, active, badge, children }) {
   return (
-    <div className={`bg-[#161428] rounded-lg border p-3 transition-all ${active ? 'border-['+color+']40 shadow-lg shadow-['+color+']/5' : 'border-[#2D2A5E]'}`}>
+    <div className={`bg-white rounded-lg border p-3 transition-all shadow-sm ${active ? 'border-['+color+']/30 shadow-md' : 'border-gray-200'}`}>
       <div className="flex items-center justify-between mb-2">
         <div className="flex items-center gap-2">
           <Icon size={13} style={{color}}/>
-          <span className="text-xs font-bold text-white">{title}</span>
+          <span className="text-xs font-bold text-gray-800">{title}</span>
         </div>
-        {badge && <span className="text-[9px] px-1.5 py-0.5 rounded bg-orange-500/20 text-orange-400 border border-orange-500/30">{badge}</span>}
+        {badge && <span className="text-[9px] px-1.5 py-0.5 rounded bg-[#F0EDFA] text-[#513CC8] border border-[#513CC8]/20">{badge}</span>}
       </div>
       {children}
     </div>
@@ -662,13 +736,13 @@ function MinistryCard({ title, icon: Icon, color, active, badge, children }) {
 
 function MiniMinistry({ title, icon: Icon, color, badge, children }) {
   return (
-    <div className="bg-[#161428] rounded-lg border border-[#2D2A5E] p-2.5">
+    <div className="bg-white rounded-lg border border-gray-200 p-2.5 shadow-sm">
       <div className="flex items-center justify-between mb-1.5">
         <div className="flex items-center gap-1.5">
           <Icon size={11} style={{color}}/>
-          <span className="text-[10px] font-bold text-white">{title}</span>
+          <span className="text-[10px] font-bold text-gray-700">{title}</span>
         </div>
-        {badge && <span className="text-[8px] px-1 py-0.5 rounded bg-red-500/20 text-red-400">{badge}</span>}
+        {badge && <span className="text-[8px] px-1 py-0.5 rounded bg-red-50 text-red-500 border border-red-100">{badge}</span>}
       </div>
       {children}
     </div>
