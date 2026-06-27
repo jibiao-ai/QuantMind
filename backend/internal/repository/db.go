@@ -130,6 +130,34 @@ func seedData(cfg *config.Config) {
 		}
 		DB.Create(&admin)
 		log.Println("Admin user created: admin / Admin@2026!")
+
+		// Seed default built-in users
+		defaultUsers := []struct {
+			Username    string
+			DisplayName string
+			Password    string
+		}{
+			{"yongli.liu", "刘勇利", "Password01!"},
+			{"wei.shao", "邵巍", "Password01!"},
+			{"wei.wnag", "王薇", "Password01!"},
+			{"chaowei.ren", "任超伟", "Password01!"},
+			{"shuchao.zhang", "张树超", "Password01!"},
+			{"huandong.li", "李唤东", "Password01!"},
+			{"chunlai.wang", "王春来", "Password01!"},
+		}
+		for _, u := range defaultUsers {
+			hp, _ := bcrypt.GenerateFromPassword([]byte(u.Password), bcrypt.DefaultCost)
+			user := model.User{
+				Username:    u.Username,
+				Password:    string(hp),
+				DisplayName: u.DisplayName,
+				Role:        "user",
+				Email:       u.Username + "@quantmind.ai",
+				IsActive:    true,
+			}
+			DB.Create(&user)
+		}
+		log.Println("Default users seeded: 7 built-in users created")
 	}
 
 	// Seed AI providers

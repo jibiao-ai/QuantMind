@@ -1522,9 +1522,9 @@ func (h *Handler) RunCompassEvolution(c *gin.Context) {
 
 			duration := time.Since(startTime).Seconds()
 
-			score := bt.WinRate*2 + bt.Sharpe + bt.TotalReturn*5
+			score := bt.WinRate*2 + bt.SharpeRatio + bt.TotalReturn*5
 			status := "pass"
-			reason := fmt.Sprintf("胜率%.1f%% 夏普%.2f 收益%.1f%%", bt.WinRate*100, bt.Sharpe, bt.TotalReturn*100)
+			reason := fmt.Sprintf("胜率%.1f%% 夏普%.2f 收益%.1f%%", bt.WinRate*100, bt.SharpeRatio, bt.TotalReturn*100)
 
 			if score < 0.5 {
 				status = "reject"
@@ -1544,7 +1544,7 @@ func (h *Handler) RunCompassEvolution(c *gin.Context) {
 				StrategyName: strategy.Name,
 				Score:        score,
 				WinRate:      bt.WinRate,
-				Sharpe:       bt.Sharpe,
+				Sharpe:       bt.SharpeRatio,
 				Status:       status,
 				Duration:     duration,
 				Reason:       reason,
@@ -1597,7 +1597,7 @@ func compassBacktestSingle(klines []map[string]interface{}, signal StrategySigna
 	}
 
 	if len(trades) == 0 {
-		return BacktestSummary{WinRate: 0, Sharpe: 0, TotalReturn: 0}
+		return BacktestSummary{WinRate: 0, SharpeRatio: 0, TotalReturn: 0}
 	}
 
 	wins := 0
@@ -1623,7 +1623,7 @@ func compassBacktestSingle(klines []map[string]interface{}, signal StrategySigna
 
 	return BacktestSummary{
 		WinRate:     winRate,
-		Sharpe:      sharpe,
+		SharpeRatio: sharpe,
 		TotalReturn: totalReturn,
 		TradeCount:  len(trades),
 	}
