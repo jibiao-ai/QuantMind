@@ -173,5 +173,7 @@ export const validateStockCode = (params) => api.get('/data/validate-stock', { p
 export const getCompassStrategies = () => api.get('/compass/strategies')
 export const runCompassAnalysis = (data) => api.post('/compass/analyze', data)
 export const getCompassHistory = (params) => api.get('/compass/history', { params })
+export const getCompassKline = (params) => api.get('/compass/kline', { params })
+export const runCompassEvolution = (data) => api.post('/compass/evolve', data)
 
 export default api
