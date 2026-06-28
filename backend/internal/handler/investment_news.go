@@ -267,8 +267,8 @@ func (h *Handler) translateAndSummarize(titles []string, trackName string) ([]st
 		return nil, ""
 	}
 
-	aiConfig := getDecisionAIConfig()
-	if aiConfig.APIKey == "" {
+	baseURL, apiKey, model := getDecisionAIConfig()
+	if apiKey == "" {
 		// No AI configured, return titles as-is
 		cn := make([]string, len(titles))
 		for i, t := range titles {
@@ -297,7 +297,7 @@ func (h *Handler) translateAndSummarize(titles []string, trackName string) ([]st
 输出纯JSON格式（不要markdown代码块）：
 {"translations": ["标题1中文", "标题2中文", ...], "highlights": ["要点1", "要点2", ...]}`, trackName, titleList)
 
-	result := callLLMForNews(aiConfig, prompt)
+	result := callLLMForNews(baseURL, apiKey, model, prompt)
 	if result == "" {
 		cn := make([]string, len(titles))
 		for i, t := range titles {
@@ -311,16 +311,16 @@ func (h *Handler) translateAndSummarize(titles []string, trackName string) ([]st
 	return translations, highlights
 }
 
-func callLLMForNews(config decisionAIConfig, prompt string) string {
-	payload := fmt.Sprintf(`{"model":"%s","messages":[{"role":"user","content":%q}],"temperature":0.3,"max_tokens":4000}`, config.Model, prompt)
+func callLLMForNews(baseURL, apiKey, model, prompt string) string {
+	payload := fmt.Sprintf(`{"model":"%s","messages":[{"role":"user","content":%q}],"temperature":0.3,"max_tokens":4000}`, model, prompt)
 
 	client := &http.Client{Timeout: 60 * time.Second}
-	req, err := http.NewRequest("POST", config.BaseURL+"/chat/completions", strings.NewReader(payload))
+	req, err := http.NewRequest("POST", baseURL+"/chat/completions", strings.NewReader(payload))
 	if err != nil {
 		return ""
 	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Authorization", "Bearer "+config.APIKey)
+	req.Header.Set("Authorization", "Bearer "+apiKey)
 
 	resp, err := client.Do(req)
 	if err != nil {
