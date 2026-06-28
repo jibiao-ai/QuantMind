@@ -35,6 +35,9 @@ func main() {
 	// Migrate Tushare broadcast models (股市播报/财务数据)
 	handler.AutoMigrateBroadcastModels(repository.DB)
 
+	// Migrate Investment News models
+	handler.AutoMigrateNewsModels(repository.DB)
+
 	mq.InitRabbitMQ(cfg)
 	defer mq.Close()
 
@@ -72,6 +75,9 @@ func main() {
 	}))
 
 	h := handler.New()
+
+	// Start Investment News scheduler (every 4 hours)
+	handler.StartNewsScheduler(h)
 
 	// Public routes
 	r.POST("/api/login", h.Login)
@@ -155,6 +161,12 @@ func main() {
 		auth.GET("/compass/history", h.GetJinCeHistory)
 		auth.GET("/compass/kline", h.GetCompassKline)
 		auth.POST("/compass/evolve", h.RunCompassEvolution)
+
+		// 投资资讯 (Investment News)
+		auth.GET("/news/investment", h.GetInvestmentNews)
+		auth.GET("/news/investment/highlights", h.GetInvestmentHighlights)
+		auth.GET("/news/investment/dates", h.GetNewsDates)
+		auth.POST("/news/investment/refresh", h.RefreshInvestmentNews)
 
 		// Today's stock picks (all users can read)
 		auth.GET("/stock-picks/today", h.GetTodayPicks)

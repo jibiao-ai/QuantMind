@@ -23,6 +23,7 @@ import StockDecisionPage from '../pages/StockDecisionPage'
 import MasterJudgePage from '../pages/MasterJudgePage'
 import XiaofanSelectPage from '../pages/XiaofanSelectPage'
 import JinCeCompassPage from '../pages/JinCeCompassPage'
+import InvestmentNewsPage from '../pages/InvestmentNewsPage'
 import { Menu } from 'lucide-react'
 
 const pageMap = {
@@ -37,6 +38,7 @@ const pageMap = {
   'ai-stock-pick': AIStockPickPage,
   'xiaofan-select': XiaofanSelectPage,
   'jince-compass': JinCeCompassPage,
+  'investment-news': InvestmentNewsPage,
   // === AI智能体功能已隐藏（暂时关闭） ===
   // 'smart-ask': () => <ChatPage agentType="smart_ask" />,
   // 'smart-diagnose': () => <ChatPage agentType="smart_diagnose" />,
@@ -66,6 +68,7 @@ const pageTitles = {
   'ai-stock-pick': '隔夜套利',
   'xiaofan-select': '小樊精选',
   'jince-compass': '金策罗盘',
+  'investment-news': '投资资讯',
   'stock-picks': '今日推荐',
   'users': '用户管理',
   'audit-logs': '审计日志',
