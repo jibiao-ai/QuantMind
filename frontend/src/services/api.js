@@ -176,4 +176,10 @@ export const getCompassHistory = (params) => api.get('/compass/history', { param
 export const getCompassKline = (params) => api.get('/compass/kline', { params })
 export const runCompassEvolution = (data) => api.post('/compass/evolve', data)
 
+// 投资资讯 (Investment News)
+export const getInvestmentNews = (params) => api.get('/news/investment', { params })
+export const getInvestmentHighlights = (params) => api.get('/news/investment/highlights', { params })
+export const getNewsDates = () => api.get('/news/investment/dates')
+export const refreshInvestmentNews = () => api.post('/news/investment/refresh')
+
 export default api

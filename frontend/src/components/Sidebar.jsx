@@ -2,7 +2,7 @@ import useStore from '../store/useStore'
 import { 
   LayoutDashboard, TrendingUp, Brain, MessageSquare, Stethoscope, 
   Crown, BarChart3, Settings, Users, Shield, ChevronLeft, ChevronRight,
-  Activity, Zap, Bot, Database, FileText, LogOut, Star, Flame, Megaphone, Target, Radio, Bookmark, X, Compass
+  Activity, Zap, Bot, Database, FileText, LogOut, Star, Flame, Megaphone, Target, Radio, Bookmark, X, Compass, Newspaper
 } from 'lucide-react'
 
 const menuItems = [
@@ -12,6 +12,7 @@ const menuItems = [
   { key: 'broadcast', label: '股市播报', icon: Radio, group: '市场总览' },
   { key: 'hotmoney-board', label: '游资打板', icon: Zap, group: '市场总览' },
   { key: 'hot-list', label: '市场热榜', icon: Flame, group: '市场总览' },
+  { key: 'investment-news', label: '投资资讯', icon: Newspaper, group: '市场总览' },
   // 研判智策
   { key: 'stock-decision', label: '买卖决策', icon: Brain, group: '研判智策' },
   { key: 'master-judge', label: '大师研判', icon: Crown, group: '研判智策' },
